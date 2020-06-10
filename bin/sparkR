@@ -23,4 +23,5 @@ fi
 
 source "${SPARK_HOME}"/bin/load-spark-env.sh
 export _SPARK_CMD_USAGE="Usage: ./bin/sparkR [options]"
+# 提交任务的点
 exec "${SPARK_HOME}"/bin/spark-submit sparkr-shell-main "$@"

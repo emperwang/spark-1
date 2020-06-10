@@ -18,12 +18,14 @@
 #
 
 # Attempts to find a proper value for SPARK_HOME. Should be included using "source" directive.
-
+# 查找这个python文件
 FIND_SPARK_HOME_PYTHON_SCRIPT="$(cd "$(dirname "$0")"; pwd)/find_spark_home.py"
 
 # Short circuit if the user already has this set.
+# 如果已经存在了 SPARK_HOME 变量,则直接退出
 if [ ! -z "${SPARK_HOME}" ]; then
    exit 0
+# 如果这个 python脚本不存在,则设置home目录为当前目录
 elif [ ! -f "$FIND_SPARK_HOME_PYTHON_SCRIPT" ]; then
   # If we are not in the same directory as find_spark_home.py we are not pip installed so we don't
   # need to search the different Python directories for a Spark installation.
@@ -34,6 +36,7 @@ elif [ ! -f "$FIND_SPARK_HOME_PYTHON_SCRIPT" ]; then
 else
   # We are pip installed, use the Python script to resolve a reasonable SPARK_HOME
   # Default to standard python interpreter unless told otherwise
+  # 如果这个python 脚本存在,则指定脚本来查找home目录
   if [[ -z "$PYSPARK_DRIVER_PYTHON" ]]; then
      PYSPARK_DRIVER_PYTHON="${PYSPARK_PYTHON:-"python"}"
   fi

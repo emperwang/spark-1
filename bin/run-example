@@ -16,10 +16,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+# 如果不存在 SPARK_HOME 则运行那个  find-spark-home 脚本,来查找home目录
 if [ -z "${SPARK_HOME}" ]; then
   source "$(dirname "$0")"/find-spark-home
 fi
-
+# 可以看到此处是通过  spark-submit 来执行  run-example
 export _SPARK_CMD_USAGE="Usage: ./bin/run-example [options] example-class [example args]"
 exec "${SPARK_HOME}"/bin/spark-submit run-example "$@"

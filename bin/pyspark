@@ -16,11 +16,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+# SPARK_HOME不存在 则查找
 if [ -z "${SPARK_HOME}" ]; then
   source "$(dirname "$0")"/find-spark-home
 fi
-
+# 执行env 设置环境变量
 source "${SPARK_HOME}"/bin/load-spark-env.sh
 export _SPARK_CMD_USAGE="Usage: ./bin/pyspark [options]"
 
@@ -38,6 +38,7 @@ if [[ -n "$IPYTHON" || -n "$IPYTHON_OPTS" ]]; then
 fi
 
 # Default to standard python interpreter unless told otherwise
+# python 解析器
 if [[ -z "$PYSPARK_DRIVER_PYTHON" ]]; then
   PYSPARK_DRIVER_PYTHON="${PYSPARK_PYTHON:-"python"}"
 fi
@@ -74,4 +75,5 @@ fi
 
 export PYSPARK_DRIVER_PYTHON
 export PYSPARK_DRIVER_PYTHON_OPTS
+# 提交python 任务; 仍然是同构 spark-submit
 exec "${SPARK_HOME}"/bin/spark-submit pyspark-shell-main --name "PySparkShell" "$@"

@@ -27,6 +27,7 @@ fi
 if [ -n "${JAVA_HOME}" ]; then
   RUNNER="${JAVA_HOME}/bin/java"
 else
+  # commnad 为bash buildin命令, command -v 可以得到java的全路径
   if [ "$(command -v java)" ]; then
     RUNNER="java"
   else
@@ -36,6 +37,7 @@ else
 fi
 
 # Find Spark jars.
+# spark jar 目录
 if [ -d "${SPARK_HOME}/jars" ]; then
   SPARK_JARS_DIR="${SPARK_HOME}/jars"
 else
@@ -67,6 +69,7 @@ fi
 #
 # The exit code of the launcher is appended to the output, so the parent shell removes it from the
 # command array and checks the value to see if the launcher succeeded.
+# 运行命令 是使用java 来运行 org.apache.spark.launcher.Main这个类
 build_command() {
   "$RUNNER" -Xmx128m -cp "$LAUNCH_CLASSPATH" org.apache.spark.launcher.Main "$@"
   printf "%d\0" $?

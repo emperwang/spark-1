@@ -22,17 +22,19 @@
 # conf/ subdirectory.
 
 # Figure out where Spark is installed
+# 确定SPARK HOME
 if [ -z "${SPARK_HOME}" ]; then
   source "$(dirname "$0")"/find-spark-home
 fi
 
 if [ -z "$SPARK_ENV_LOADED" ]; then
   export SPARK_ENV_LOADED=1
-
+  # 配置文件目录
   export SPARK_CONF_DIR="${SPARK_CONF_DIR:-"${SPARK_HOME}"/conf}"
 
   if [ -f "${SPARK_CONF_DIR}/spark-env.sh" ]; then
     # Promote all variable declarations to environment (exported) variables
+    # 设置环境变量
     set -a
     . "${SPARK_CONF_DIR}/spark-env.sh"
     set +a

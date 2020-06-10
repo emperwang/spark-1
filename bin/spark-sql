@@ -22,4 +22,5 @@ if [ -z "${SPARK_HOME}" ]; then
 fi
 
 export _SPARK_CMD_USAGE="Usage: ./bin/spark-sql [options] [cli option]"
+# 注意这里的提交的点
 exec "${SPARK_HOME}"/bin/spark-submit --class org.apache.spark.sql.hive.thriftserver.SparkSQLCLIDriver "$@"
