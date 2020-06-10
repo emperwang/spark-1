@@ -29,7 +29,7 @@ import java.util.List;
  * Usage: JavaSparkPi [partitions]
  */
 public final class JavaSparkPi {
-  // 添加jvm参数  -Dspring.master=local  表示本地运行
+  // 添加jvm参数  -Dspark.master=local  表示本地运行
   public static void main(String[] args) throws Exception {
     SparkSession spark = SparkSession
       .builder()
