@@ -144,6 +144,7 @@ private[spark] abstract class WebUI(
     assert(serverInfo.isEmpty, s"Attempted to bind $className more than once!")
     try {
       val host = Option(conf.getenv("SPARK_LOCAL_IP")).getOrElse("0.0.0.0")
+      /** startJettyServer: jetty server started */
       serverInfo = Some(startJettyServer(host, port, sslOptions, handlers, conf, name))
       logInfo(s"Bound $className to $host, and started at $webUrl")
     } catch {

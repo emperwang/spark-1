@@ -80,7 +80,7 @@ private[master] class MasterArguments(args: Array[String], conf: SparkConf) exte
     case ("--properties-file") :: value :: tail =>
       propertiesFile = value
       parse(tail)
-
+    // 打印帮助信息
     case ("--help") :: tail =>
       printUsageAndExit(0)
 

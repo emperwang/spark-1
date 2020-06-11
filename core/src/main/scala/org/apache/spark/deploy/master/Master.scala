@@ -45,7 +45,7 @@ private[deploy] class Master(
     val securityMgr: SecurityManager,
     val conf: SparkConf)
   extends ThreadSafeRpcEndpoint with Logging with LeaderElectable {
-
+  // 创建了一个线程池
   private val forwardMessageThread =
     ThreadUtils.newDaemonSingleThreadScheduledExecutor("master-forward-message-thread")
 
@@ -137,6 +137,7 @@ private[deploy] class Master(
     logInfo("Starting Spark master at " + masterUrl)
     logInfo(s"Running Spark version ${org.apache.spark.SPARK_VERSION}")
     webUi = new MasterWebUI(this, webUiPort)
+    // 这里对web进行端口绑定时, 就会启动jetty server
     webUi.bind()
     masterWebUiUrl = "http://" + masterPublicAddress + ":" + webUi.boundPort
     if (reverseProxy) {
@@ -145,6 +146,7 @@ private[deploy] class Master(
       logInfo(s"Spark Master is acting as a reverse proxy. Master, Workers and " +
        s"Applications UIs are available at $masterWebUiUrl")
     }
+    // 这里启动一个定时线程
     checkForWorkerTimeOutTask = forwardMessageThread.scheduleAtFixedRate(new Runnable {
       override def run(): Unit = Utils.tryLogNonFatalError {
         self.send(CheckForWorkerTimeOut)
@@ -1048,14 +1050,18 @@ private[deploy] class Master(
 private[deploy] object Master extends Logging {
   val SYSTEM_NAME = "sparkMaster"
   val ENDPOINT_NAME = "Master"
-
+  // master启动入口
   def main(argStrings: Array[String]) {
     Thread.setDefaultUncaughtExceptionHandler(new SparkUncaughtExceptionHandler(
       exitOnUncaughtException = false))
     Utils.initDaemon(log)
+    // 创建一个 application config
     val conf = new SparkConf
+    // 包装命令行参数
     val args = new MasterArguments(argStrings, conf)
+    //
     val (rpcEnv, _, _) = startRpcEnvAndEndpoint(args.host, args.port, args.webUiPort, conf)
+    //
     rpcEnv.awaitTermination()
   }
 
