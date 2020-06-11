@@ -19,6 +19,7 @@
 # should not be executable directly
 # also should not be passed any arguments, since we need original $*
 
+# 可以看到这里主要是 设置一些环境变量
 # symlink and absolute path should rely on SPARK_HOME to resolve
 if [ -z "${SPARK_HOME}" ]; then
   export SPARK_HOME="$(cd "`dirname "$0"`"/..; pwd)"

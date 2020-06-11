@@ -25,6 +25,7 @@ fi
 
 # NOTE: This exact class name is matched downstream by SparkSubmit.
 # Any changes need to be reflected there.
+# 要启动的类
 CLASS="org.apache.spark.deploy.master.Master"
 
 if [[ "$@" = *--help ]] || [[ "$@" = *-h ]]; then
@@ -61,7 +62,7 @@ fi
 if [ "$SPARK_MASTER_WEBUI_PORT" = "" ]; then
   SPARK_MASTER_WEBUI_PORT=8080
 fi
-
+# 可以看到真正 运行任务是通过 spark-daemon.sh 脚本
 "${SPARK_HOME}/sbin"/spark-daemon.sh start $CLASS 1 \
   --host $SPARK_MASTER_HOST --port $SPARK_MASTER_PORT --webui-port $SPARK_MASTER_WEBUI_PORT \
   $ORIGINAL_ARGS

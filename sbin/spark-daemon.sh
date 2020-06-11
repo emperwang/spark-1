@@ -29,7 +29,7 @@
 #   SPARK_NICENESS The scheduling priority for daemons. Defaults to 0.
 #   SPARK_NO_DAEMONIZE   If set, will run the proposed command in the foreground. It will not output a PID file.
 ##
-
+# 使用方法
 usage="Usage: spark-daemon.sh [--config <conf-dir>] (start|stop|submit|status) <spark-command> <spark-instance-number> <args...>"
 
 # if no args specified, show usage
@@ -70,7 +70,7 @@ command=$1
 shift
 instance=$1
 shift
-
+# 滚动日志
 spark_rotate_log ()
 {
     log=$1;
@@ -125,6 +125,7 @@ fi
 
 execute_command() {
   if [ -z ${SPARK_NO_DAEMONIZE+set} ]; then
+    # 这个启动命令 很有意思
       nohup -- "$@" >> $log 2>&1 < /dev/null &
       newpid="$!"
 
@@ -164,7 +165,7 @@ run_command() {
       exit 1
     fi
   fi
-
+  # 数据的同步
   if [ "$SPARK_MASTER" != "" ]; then
     echo rsync from "$SPARK_MASTER"
     rsync -a -e ssh --delete --exclude=.svn --exclude='logs/*' --exclude='contrib/hod/logs/*' "$SPARK_MASTER/" "${SPARK_HOME}"

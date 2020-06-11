@@ -41,6 +41,6 @@ if [ "$SPARK_MASTER_HOST" = "" ]; then
 	  ;;
   esac
 fi
-
+# 调用slaves.sh 来启动所有的slave; 其实就是ssh 到slave所在的机器,来执行sbin/start-slave.sh命令
 # Launch the slaves
 "${SPARK_HOME}/sbin/slaves.sh" cd "${SPARK_HOME}" \; "${SPARK_HOME}/sbin/start-slave.sh" "spark://$SPARK_MASTER_HOST:$SPARK_MASTER_PORT"

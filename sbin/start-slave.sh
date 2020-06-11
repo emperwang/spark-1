@@ -37,6 +37,7 @@ fi
 
 # NOTE: This exact class name is matched downstream by SparkSubmit.
 # Any changes need to be reflected there.
+# worker 的class
 CLASS="org.apache.spark.deploy.worker.Worker"
 
 if [[ $# -lt 1 ]] || [[ "$@" = *--help ]] || [[ "$@" = *-h ]]; then
@@ -77,7 +78,7 @@ function start_instance {
     PORT_NUM=$(( $SPARK_WORKER_PORT + $WORKER_NUM - 1 ))
   fi
   WEBUI_PORT=$(( $SPARK_WORKER_WEBUI_PORT + $WORKER_NUM - 1 ))
-
+  # 启动
   "${SPARK_HOME}/sbin"/spark-daemon.sh start $CLASS $WORKER_NUM \
      --webui-port "$WEBUI_PORT" $PORT_FLAG $PORT_NUM $MASTER "$@"
 }
