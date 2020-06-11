@@ -34,7 +34,7 @@
     <sbt.project.name>examples</sbt.project.name>
     <build.testJarPhase>none</build.testJarPhase>
     <build.copyDependenciesPhase>package</build.copyDependenciesPhase>
-    <hadoop.deps.scope>provided</hadoop.deps.scope>
+    <hadoop.deps.scope>compile</hadoop.deps.scope>
     <hive.deps.scope>provided</hive.deps.scope>
     <parquet.deps.scope>provided</parquet.deps.scope>
   </properties>
