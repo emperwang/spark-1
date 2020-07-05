@@ -31,6 +31,7 @@ import java.util.List;
 public final class JavaSparkPi {
   // 添加jvm参数  -Dspark.master=local  表示本地运行
   public static void main(String[] args) throws Exception {
+    System.setProperty("spark.master","local");
     SparkSession spark = SparkSession
       .builder()
       .appName("JavaSparkPi")

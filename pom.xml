@@ -230,6 +230,18 @@
     <CodeCacheSize>1g</CodeCacheSize>
   </properties>
   <repositories>
+	  <repository>
+		<id>nexus-aliyun</id>
+		<name>Nexus aliyun</name>
+		<layout>default</layout>
+		<url>http://maven.aliyun.com/nexus/content/groups/public</url>
+		<snapshots>
+			<enabled>false</enabled>
+		</snapshots>
+		<releases>
+			<enabled>true</enabled>
+		</releases>
+	</repository>
     <repository>
       <id>gcs-maven-central-mirror</id>
       <!--
@@ -2284,6 +2296,9 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-jar-plugin</artifactId>
           <version>3.0.2</version>
+		  <goals>
+			<goal>test-jar</goal>
+		  </goals>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
