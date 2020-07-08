@@ -44,9 +44,10 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
       val ref: NettyRpcEndpointRef) {
     val inbox = new Inbox(ref, endpoint)
   }
-
+  // 保存各个节点
   private val endpoints: ConcurrentMap[String, EndpointData] =
     new ConcurrentHashMap[String, EndpointData]
+  // 保存各个节点的引用
   private val endpointRefs: ConcurrentMap[RpcEndpoint, RpcEndpointRef] =
     new ConcurrentHashMap[RpcEndpoint, RpcEndpointRef]
 

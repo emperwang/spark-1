@@ -1056,12 +1056,13 @@ private[deploy] object Master extends Logging {
       exitOnUncaughtException = false))
     Utils.initDaemon(log)
     // 创建一个 application config
+    // 1.SparkConf构造器中加载了 System.getProperties中所有以 spark开头的配置
     val conf = new SparkConf
     // 包装命令行参数
     val args = new MasterArguments(argStrings, conf)
     //
     val (rpcEnv, _, _) = startRpcEnvAndEndpoint(args.host, args.port, args.webUiPort, conf)
-    //
+    // 等待停止
     rpcEnv.awaitTermination()
   }
 
@@ -1077,7 +1078,9 @@ private[deploy] object Master extends Logging {
       webUiPort: Int,
       conf: SparkConf): (RpcEnv, Int, Option[Int]) = {
     val securityMgr = new SecurityManager(conf)
+    // 创建rpcEnv
     val rpcEnv = RpcEnv.create(SYSTEM_NAME, host, port, conf, securityMgr)
+    // 设置 endPoint; 也就是把 Master注册到 dispatcher
     val masterEndpoint = rpcEnv.setupEndpoint(ENDPOINT_NAME,
       new Master(rpcEnv, rpcEnv.address, webUiPort, securityMgr, conf))
     val portsResponse = masterEndpoint.askSync[BoundPortsResponse](BoundPortsRequest)

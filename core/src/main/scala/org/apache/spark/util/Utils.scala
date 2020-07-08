@@ -2089,6 +2089,7 @@ private[spark] object Utils extends Logging {
   }
 
   /** Load properties present in the given file. */
+    // 把配置文件中的内容加载到 Properties中
   def getPropertiesFromFile(filename: String): Map[String, String] = {
     val file = new File(filename)
     require(file.exists(), s"Properties file $file does not exist")
@@ -2111,6 +2112,7 @@ private[spark] object Utils extends Logging {
   }
 
   /** Return the path of the default Spark properties file. */
+    // 获取 spark-defaults.conf
   def getDefaultPropertiesFile(env: Map[String, String] = sys.env): String = {
     env.get("SPARK_CONF_DIR")
       .orElse(env.get("SPARK_HOME").map { t => s"$t${File.separator}conf" })

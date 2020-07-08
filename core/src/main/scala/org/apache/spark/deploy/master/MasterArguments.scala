@@ -27,27 +27,35 @@ import org.apache.spark.util.{IntParam, Utils}
  * Command-line parser for the master.
  */
 private[master] class MasterArguments(args: Array[String], conf: SparkConf) extends Logging {
+  // 获取 local hostName
   var host = Utils.localHostName()
+  // master 端口号
   var port = 7077
+  // master web端口号
   var webUiPort = 8080
+  // 记录参数中传递的配置文件路径
   var propertiesFile: String = null
 
   // Check for settings in environment variables
   if (System.getenv("SPARK_MASTER_IP") != null) {
     logWarning("SPARK_MASTER_IP is deprecated, please use SPARK_MASTER_HOST")
+    // 如果设置了 SPARK_MASTER_IP,则覆盖host
     host = System.getenv("SPARK_MASTER_IP")
   }
 
   if (System.getenv("SPARK_MASTER_HOST") != null) {
+    // 使用SPARK_MASTER_HOST 此配置设置 host
     host = System.getenv("SPARK_MASTER_HOST")
   }
   if (System.getenv("SPARK_MASTER_PORT") != null) {
+    // 使用配置的 SPARK_MASTER_PORT作为port
     port = System.getenv("SPARK_MASTER_PORT").toInt
   }
   if (System.getenv("SPARK_MASTER_WEBUI_PORT") != null) {
+    // 使用配置的 SPARK_MASTER_WEBUI_PORT 作为web prot
     webUiPort = System.getenv("SPARK_MASTER_WEBUI_PORT").toInt
   }
-
+  // 解析参数
   parse(args.toList)
 
   // This mutates the SparkConf, so all accesses to it must be made after this line
@@ -82,7 +90,7 @@ private[master] class MasterArguments(args: Array[String], conf: SparkConf) exte
       parse(tail)
     // 打印帮助信息
     case ("--help") :: tail =>
-      printUsageAndExit(0)
+      printUsageAndExit(0)  // 打印帮助信息
 
     case Nil => // No-op
 

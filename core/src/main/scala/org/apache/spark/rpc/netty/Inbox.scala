@@ -60,7 +60,7 @@ private[netty] class Inbox(
   extends Logging {
 
   inbox =>  // Give this an alias so we can use it more clearly in closures.
-
+  // messages 保存接收的消息
   @GuardedBy("this")
   protected val messages = new java.util.LinkedList[InboxMessage]()
 
