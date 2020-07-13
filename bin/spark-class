@@ -16,14 +16,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
+# spark_home的设置
 if [ -z "${SPARK_HOME}" ]; then
   source "$(dirname "$0")"/find-spark-home
 fi
-
+# 配置运行环境
 . "${SPARK_HOME}"/bin/load-spark-env.sh
 
 # Find the java binary
+# java程序
 if [ -n "${JAVA_HOME}" ]; then
   RUNNER="${JAVA_HOME}/bin/java"
 else
@@ -49,7 +50,7 @@ if [ ! -d "$SPARK_JARS_DIR" ] && [ -z "$SPARK_TESTING$SPARK_SQL_TESTING" ]; then
   echo "You need to build Spark with the target \"package\" before running this program." 1>&2
   exit 1
 else
-  LAUNCH_CLASSPATH="$SPARK_JARS_DIR/*"
+  LAUNCH_CLASSPATH="$SPARK_JARS_DIR/*"   # 把jar的路径添加到LAUNCH_CLASSPATH
 fi
 
 # Add the launcher build dir to the classpath if requested.
@@ -70,6 +71,7 @@ fi
 # The exit code of the launcher is appended to the output, so the parent shell removes it from the
 # command array and checks the value to see if the launcher succeeded.
 # 运行命令 是使用java 来运行 org.apache.spark.launcher.Main这个类
+# 通过此 org.apache.spark.launcher.Main 类来创建具体的启动命令
 build_command() {
   "$RUNNER" -Xmx128m -cp "$LAUNCH_CLASSPATH" org.apache.spark.launcher.Main "$@"
   printf "%d\0" $?
@@ -77,12 +79,15 @@ build_command() {
 
 # Turn off posix mode since it does not allow process substitution
 set +o posix
+# 存储命令的数组
 CMD=()
+# 从终端中读取 org.apache.spark.launcher.Main 构建的命令
 while IFS= read -d '' -r ARG; do
   CMD+=("$ARG")
 done < <(build_command "$@")
-
+# 数组的长度
 COUNT=${#CMD[@]}
+# 最后一个元素的index
 LAST=$((COUNT - 1))
 LAUNCHER_EXIT_CODE=${CMD[$LAST]}
 
@@ -97,6 +102,7 @@ fi
 if [ $LAUNCHER_EXIT_CODE != 0 ]; then
   exit $LAUNCHER_EXIT_CODE
 fi
-
+# 数组切片操作
 CMD=("${CMD[@]:0:$LAST}")
+# exec执行命令
 exec "${CMD[@]}"

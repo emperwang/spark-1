@@ -37,13 +37,13 @@ if [[ "$@" = *--help ]] || [[ "$@" = *-h ]]; then
   "${SPARK_HOME}"/bin/spark-class $CLASS --help 2>&1 | grep -v "$pattern" 1>&2
   exit 1
 fi
-
+# 保存源参数
 ORIGINAL_ARGS="$@"
-
+# 执行配置的脚本
 . "${SPARK_HOME}/sbin/spark-config.sh"
 
 . "${SPARK_HOME}/bin/load-spark-env.sh"
-
+# 端口
 if [ "$SPARK_MASTER_PORT" = "" ]; then
   SPARK_MASTER_PORT=7077
 fi
