@@ -28,16 +28,21 @@ import static org.apache.spark.launcher.CommandBuilderUtils.*;
 
 /**
  * Command line interface for the Spark launcher. Used internally by Spark scripts.
+ * 命令行接口类,被spark script脚本使用
  */
 class Main {
 
   /**
+   *  使用方法说明:
    * Usage: Main [class] [class args]
    * <p>
    * This CLI works in two different modes:
+   * 有两种模式:
    * <ul>
+   *     spark-submit 使用,提交应用
    *   <li>"spark-submit": if <i>class</i> is "org.apache.spark.deploy.SparkSubmit", the
    *   {@link SparkLauncher} class is used to launch a Spark application.</li>
+   *    spark-class 使用, 启动程序
    *   <li>"spark-class": if another class is provided, an internal Spark class is run.</li>
    * </ul>
    *
