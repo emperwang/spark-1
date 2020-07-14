@@ -59,6 +59,7 @@ public class TransportClientFactory implements Closeable {
 
   /** A simple data structure to track the pool of clients between two peer nodes. */
   private static class ClientPool {
+    // clients 存储客户端
     TransportClient[] clients;
     Object[] locks;
 
@@ -76,6 +77,7 @@ public class TransportClientFactory implements Closeable {
   private final TransportContext context;
   private final TransportConf conf;
   private final List<TransportClientBootstrap> clientBootstraps;
+  // 存储对每一个地址的 连接的客户端
   private final ConcurrentHashMap<SocketAddress, ClientPool> connectionPool;
 
   /** Random number generator for picking connections between peers. */
@@ -184,6 +186,7 @@ public class TransportClientFactory implements Closeable {
           logger.info("Found inactive connection to {}, creating a new one.", resolvedAddress);
         }
       }
+      // createClient 创建客户端  bootstrap
       clientPool.clients[clientIndex] = createClient(resolvedAddress);
       return clientPool.clients[clientIndex];
     }
@@ -205,7 +208,7 @@ public class TransportClientFactory implements Closeable {
   private TransportClient createClient(InetSocketAddress address)
       throws IOException, InterruptedException {
     logger.debug("Creating new connection to {}", address);
-
+    // 客户端使用netty的 bootStrap
     Bootstrap bootstrap = new Bootstrap();
     bootstrap.group(workerGroup)
       .channel(socketChannelClass)
@@ -229,6 +232,7 @@ public class TransportClientFactory implements Closeable {
     bootstrap.handler(new ChannelInitializer<SocketChannel>() {
       @Override
       public void initChannel(SocketChannel ch) {
+        // 消息处理方法 clientHandler, spark自定义的
         TransportChannelHandler clientHandler = context.initializePipeline(ch);
         clientRef.set(clientHandler.getClient());
         channelRef.set(ch);
@@ -237,6 +241,7 @@ public class TransportClientFactory implements Closeable {
 
     // Connect to the remote server
     long preConnect = System.nanoTime();
+    // 客户端连接操作
     ChannelFuture cf = bootstrap.connect(address);
     if (!cf.await(conf.connectionTimeoutMs())) {
       throw new IOException(
@@ -244,8 +249,9 @@ public class TransportClientFactory implements Closeable {
     } else if (cf.cause() != null) {
       throw new IOException(String.format("Failed to connect to %s", address), cf.cause());
     }
-
+    // 客户端
     TransportClient client = clientRef.get();
+    // 双方连接的 channel
     Channel channel = channelRef.get();
     assert client != null : "Channel future completed successfully with null client";
 

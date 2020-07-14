@@ -77,12 +77,14 @@ private[netty] class Inbox(
   private var numActiveThreads = 0
 
   // OnStart should be the first message to process
+  // 在Inbox初始化就添加了一个 OnStart的消息等待处理
   inbox.synchronized {
     messages.add(OnStart)
   }
 
   /**
    * Process stored messages.
+   *  处理信息
    */
   def process(dispatcher: Dispatcher): Unit = {
     var message: InboxMessage = null
@@ -90,6 +92,7 @@ private[netty] class Inbox(
       if (!enableConcurrent && numActiveThreads != 0) {
         return
       }
+      // 从容器中获取保存的消息
       message = messages.poll()
       if (message != null) {
         numActiveThreads += 1
@@ -117,7 +120,7 @@ private[netty] class Inbox(
             endpoint.receive.applyOrElse[Any, Unit](content, { msg =>
               throw new SparkException(s"Unsupported message $message from ${_sender}")
             })
-
+          // 处理消息时,肯定会先进入这里, 因为Inbox初始化就会添加一个OnStart的消息
           case OnStart =>
             endpoint.onStart()
             if (!endpoint.isInstanceOf[ThreadSafeRpcEndpoint]) {
@@ -169,6 +172,7 @@ private[netty] class Inbox(
       // We already put "OnStop" into "messages", so we should drop further messages
       onDrop(message)
     } else {
+      // 把消息方法 队列 messages中
       messages.add(message)
       false
     }

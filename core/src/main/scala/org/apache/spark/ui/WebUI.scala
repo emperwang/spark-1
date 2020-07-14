@@ -50,7 +50,9 @@ private[spark] abstract class WebUI(
   extends Logging {
 
   protected val tabs = ArrayBuffer[WebUITab]()
+  // 记录 servlet
   protected val handlers = ArrayBuffer[ServletContextHandler]()
+  //
   protected val pageToHandlers = new HashMap[WebUIPage, ArrayBuffer[ServletContextHandler]]
   protected var serverInfo: Option[ServerInfo] = None
   protected val publicHostName = Option(conf.getenv("SPARK_PUBLIC_DNS")).getOrElse(
@@ -145,6 +147,7 @@ private[spark] abstract class WebUI(
     try {
       val host = Option(conf.getenv("SPARK_LOCAL_IP")).getOrElse("0.0.0.0")
       /** startJettyServer: jetty server started */
+      // 启动jetty
       serverInfo = Some(startJettyServer(host, port, sslOptions, handlers, conf, name))
       logInfo(s"Bound $className to $host, and started at $webUrl")
     } catch {

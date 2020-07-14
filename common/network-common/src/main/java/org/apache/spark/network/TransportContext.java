@@ -111,6 +111,7 @@ public class TransportContext {
   /** Create a server which will attempt to bind to a specific host and port. */
   public TransportServer createServer(
       String host, int port, List<TransportServerBootstrap> bootstraps) {
+    // 创建 TransportServer,其下面是 bootstrapServer
     return new TransportServer(this, host, port, rpcHandler, bootstraps);
   }
 

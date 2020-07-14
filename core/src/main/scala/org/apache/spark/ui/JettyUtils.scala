@@ -154,6 +154,7 @@ private[spark] object JettyUtils extends Logging {
       beforeRedirect: HttpServletRequest => Unit = x => (),
       basePath: String = "",
       httpMethods: Set[String] = Set("GET")): ServletContextHandler = {
+    // 前缀
     val prefixedDestPath = basePath + destPath
     val servlet = new HttpServlet {
       override def doGet(request: HttpServletRequest, response: HttpServletResponse): Unit = {
@@ -185,6 +186,7 @@ private[spark] object JettyUtils extends Logging {
   }
 
   /** Create a handler for serving files from a static directory */
+    // 创建Servlet 来处理静态资源
   def createStaticHandler(resourceBase: String, path: String): ServletContextHandler = {
     val contextHandler = new ServletContextHandler
     contextHandler.setInitParameter("org.eclipse.jetty.servlet.Default.gzip", "false")
@@ -294,6 +296,8 @@ private[spark] object JettyUtils extends Logging {
    * If the desired port number is contended, continues incrementing ports until a free port is
    * found. Return the jetty Server object, the chosen port, and a mutable collection of handlers.
    */
+    // jetty server的启动
+    // 大多都是  jetty的api,直接启动一个jetty
   def startJettyServer(
       hostName: String,
       port: Int,
@@ -301,7 +305,7 @@ private[spark] object JettyUtils extends Logging {
       handlers: Seq[ServletContextHandler],
       conf: SparkConf,
       serverName: String = ""): ServerInfo = {
-
+    // 添加过滤器
     addFilters(handlers, conf)
 
     // Start the server first, with no connectors.
@@ -330,7 +334,7 @@ private[spark] object JettyUtils extends Logging {
       // As each acceptor and each selector will use one thread, the number of threads should at
       // least be the number of acceptors and selectors plus 1. (See SPARK-13776)
       var minThreads = 1
-
+      // 创建连接器 connector
       def newConnector(
           connectionFactories: Array[ConnectionFactory],
           port: Int): (ServerConnector, Int) = {
@@ -356,12 +360,14 @@ private[spark] object JettyUtils extends Logging {
 
         (connector, connector.getLocalPort())
       }
+      // httpConfig
       val httpConfig = new HttpConfiguration()
       val requestHeaderSize = conf.get(UI_REQUEST_HEADER_SIZE).toInt
       logDebug(s"Using requestHeaderSize: $requestHeaderSize")
       httpConfig.setRequestHeaderSize(requestHeaderSize)
 
       // If SSL is configured, create the secure connector first.
+      // SSL 相关配置
       val securePort = sslOptions.createJettySslContextFactory().map { factory =>
         val securePort = sslOptions.port.getOrElse(if (port > 0) Utils.userPort(port, 400) else 0)
         val secureServerName = if (serverName.nonEmpty) s"$serverName (HTTPS)" else serverName
@@ -513,7 +519,7 @@ private[spark] case class ServerInfo(
     securePort: Option[Int],
     conf: SparkConf,
     private val rootHandler: ContextHandlerCollection) {
-
+  // 添加Handler
   def addHandler(handler: ServletContextHandler): Unit = {
     handler.setVirtualHosts(JettyUtils.toVirtualHosts(JettyUtils.SPARK_CONNECTOR_NAME))
     JettyUtils.addFilters(Seq(handler), conf)

@@ -53,7 +53,7 @@ private[deploy] class Master(
 
   // For application IDs
   private def createDateFormat = new SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
-
+  // 默认是  60s; woker的超时时间
   private val WORKER_TIMEOUT_MS = conf.getLong("spark.worker.timeout", 60) * 1000
   private val RETAINED_APPLICATIONS = conf.getInt("spark.deploy.retainedApplications", 200)
   private val RETAINED_DRIVERS = conf.getInt("spark.deploy.retainedDrivers", 200)
@@ -132,10 +132,13 @@ private[deploy] class Master(
         "off the RestSubmissionServer with spark.master.rest.enabled=false, or do not use " +
         "authentication.")
   }
-
+  // 初始化后 就会调用的方法; 因为Master是一个RpcEndpoint其对应有一个Inbox
+  // 在Inbox初始化就会添加一个 InStart消息等待处理
   override def onStart(): Unit = {
+    // 日志信息打印
     logInfo("Starting Spark master at " + masterUrl)
     logInfo(s"Running Spark version ${org.apache.spark.SPARK_VERSION}")
+    // 添加webUi的一些handler; post关闭app 以及driver的servlet
     webUi = new MasterWebUI(this, webUiPort)
     // 这里对web进行端口绑定时, 就会启动jetty server
     webUi.bind()
@@ -147,6 +150,8 @@ private[deploy] class Master(
        s"Applications UIs are available at $masterWebUiUrl")
     }
     // 这里启动一个定时线程
+    // CheckForWorkerTimeOut 表示消息
+    // self.send 发送检测 worker的消息; 默认定时 60s发送一次
     checkForWorkerTimeOutTask = forwardMessageThread.scheduleAtFixedRate(new Runnable {
       override def run(): Unit = Utils.tryLogNonFatalError {
         self.send(CheckForWorkerTimeOut)
@@ -158,7 +163,7 @@ private[deploy] class Master(
       restServer = Some(new StandaloneRestServer(address.host, port, conf, self, masterUrl))
     }
     restServerBoundPort = restServer.map(_.start())
-
+    // 监测 系统
     masterMetricsSystem.registerSource(masterSource)
     masterMetricsSystem.start()
     applicationMetricsSystem.start()
@@ -166,8 +171,10 @@ private[deploy] class Master(
     // started.
     masterMetricsSystem.getServletHandlers.foreach(webUi.attachHandler)
     applicationMetricsSystem.getServletHandlers.foreach(webUi.attachHandler)
-
+    // 序列化
     val serializer = new JavaSerializer(conf)
+    // 根据选择的 RECOVERY_MODE(恢复模式) 的不同,创建不同的 序列化引擎(persistenceEngine_)
+    // 以及leader选举客户端(leaderElectionAgent_)
     val (persistenceEngine_, leaderElectionAgent_) = RECOVERY_MODE match {
       case "ZOOKEEPER" =>
         logInfo("Persisting recovery state to ZooKeeper")
@@ -1052,15 +1059,18 @@ private[deploy] object Master extends Logging {
   val ENDPOINT_NAME = "Master"
   // master启动入口
   def main(argStrings: Array[String]) {
+    // 设置线程对于未处理线程的处理函数
     Thread.setDefaultUncaughtExceptionHandler(new SparkUncaughtExceptionHandler(
       exitOnUncaughtException = false))
+    // 日志相关的处理
     Utils.initDaemon(log)
     // 创建一个 application config
     // 1.SparkConf构造器中加载了 System.getProperties中所有以 spark开头的配置
     val conf = new SparkConf
     // 包装命令行参数
     val args = new MasterArguments(argStrings, conf)
-    //
+    // args.host, args.port, args.webUiPort, web 绑定的地址: host:webUiPort
+    // master绑定地址: host:port
     val (rpcEnv, _, _) = startRpcEnvAndEndpoint(args.host, args.port, args.webUiPort, conf)
     // 等待停止
     rpcEnv.awaitTermination()
@@ -1081,8 +1091,10 @@ private[deploy] object Master extends Logging {
     // 创建rpcEnv
     val rpcEnv = RpcEnv.create(SYSTEM_NAME, host, port, conf, securityMgr)
     // 设置 endPoint; 也就是把 Master注册到 dispatcher
+    // 这里真正创建了Master
     val masterEndpoint = rpcEnv.setupEndpoint(ENDPOINT_NAME,
       new Master(rpcEnv, rpcEnv.address, webUiPort, securityMgr, conf))
+    // MasterEndpoint 发送消息
     val portsResponse = masterEndpoint.askSync[BoundPortsResponse](BoundPortsRequest)
     (rpcEnv, portsResponse.webUIPort, portsResponse.restPort)
   }

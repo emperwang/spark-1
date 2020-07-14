@@ -44,7 +44,8 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
       val ref: NettyRpcEndpointRef) {
     val inbox = new Inbox(ref, endpoint)
   }
-  // 保存各个节点
+  // EndpointData 是inbox,也就是接收消息的队列
+  // key为endpint的name, value对此endpint对应的接收队列
   private val endpoints: ConcurrentMap[String, EndpointData] =
     new ConcurrentHashMap[String, EndpointData]
   // 保存各个节点的引用
@@ -52,6 +53,7 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
     new ConcurrentHashMap[RpcEndpoint, RpcEndpointRef]
 
   // Track the receivers whose inboxes may contain messages.
+  // 此队列了记录了所有 接收到的消息
   private val receivers = new LinkedBlockingQueue[EndpointData]
 
   /**
@@ -59,8 +61,9 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
    * immediately.
    */
   @GuardedBy("this")
+  // 是否停止的标志位
   private var stopped = false
-
+  // 注册endpoint
   def registerRpcEndpoint(name: String, endpoint: RpcEndpoint): NettyRpcEndpointRef = {
     val addr = RpcEndpointAddress(nettyEnv.address, name)
     val endpointRef = new NettyRpcEndpointRef(nettyEnv.conf, addr, nettyEnv)
@@ -68,11 +71,16 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
       if (stopped) {
         throw new IllegalStateException("RpcEnv has been stopped")
       }
+      // 把信息存储到 endpoints中
+      // 在创建 EndpointData 时,就会放入一个 OnStart消息
       if (endpoints.putIfAbsent(name, new EndpointData(name, endpoint, endpointRef)) != null) {
         throw new IllegalArgumentException(s"There is already an RpcEndpoint called $name")
       }
+      // 把存储后的信息取出
       val data = endpoints.get(name)
+      // 在 endpointRefs放入一份
       endpointRefs.put(data.endpoint, data.ref)
+      // 因为创建的新的data 是有消息的,故这里吧有消息的EndpointData 放入receivers中
       receivers.offer(data)  // for the OnStart message
     }
     endpointRef
@@ -108,6 +116,7 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
    * Send a message to all registered [[RpcEndpoint]]s in this process.
    *
    * This can be used to make network events known to all end points (e.g. "a new node connected").
+   * 广播消息; 把消息发送给所有的endpint
    */
   def postToAll(message: InboxMessage): Unit = {
     val iter = endpoints.keySet().iterator()

@@ -89,9 +89,11 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
   outbox => // Give this an alias so we can use it more clearly in closures.
 
   @GuardedBy("this")
+  // 存储消息
   private val messages = new java.util.LinkedList[OutboxMessage]
 
   @GuardedBy("this")
+  // 连接的客户端
   private var client: TransportClient = null
 
   /**
@@ -164,6 +166,7 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
       try {
         val _client = synchronized { client }
         if (_client != null) {
+          // 发送消息
           message.sendWith(_client)
         } else {
           assert(stopped == true)
@@ -191,8 +194,10 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
 
       override def call(): Unit = {
         try {
+          // 创建 netty客户端
           val _client = nettyEnv.createClient(address)
           outbox.synchronized {
+            // 记录创建的客户端
             client = _client
             if (stopped) {
               closeClient()

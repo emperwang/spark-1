@@ -29,6 +29,7 @@ import org.apache.spark.util.{ByteBufferInputStream, ByteBufferOutputStream, Uti
 private[spark] class JavaSerializationStream(
     out: OutputStream, counterReset: Int, extraDebugInfo: Boolean)
   extends SerializationStream {
+  // 封装传递进来的 outputStream
   private val objOut = new ObjectOutputStream(out)
   private var counter = 0
 
@@ -40,6 +41,7 @@ private[spark] class JavaSerializationStream(
    */
   def writeObject[T: ClassTag](t: T): SerializationStream = {
     try {
+      // 具体的序列化方式
       objOut.writeObject(t)
     } catch {
       case e: NotSerializableException if extraDebugInfo =>
@@ -59,7 +61,7 @@ private[spark] class JavaSerializationStream(
 
 private[spark] class JavaDeserializationStream(in: InputStream, loader: ClassLoader)
   extends DeserializationStream {
-
+  // 疯转床底进来的 InputStream
   private val objIn = new ObjectInputStream(in) {
     override def resolveClass(desc: ObjectStreamClass): Class[_] =
       try {
@@ -71,7 +73,7 @@ private[spark] class JavaDeserializationStream(in: InputStream, loader: ClassLoa
           JavaDeserializationStream.primitiveMappings.getOrElse(desc.getName, throw e)
       }
   }
-
+  // 反序列化方式
   def readObject[T: ClassTag](): T = objIn.readObject().asInstanceOf[T]
   def close() { objIn.close() }
 }
@@ -89,12 +91,13 @@ private object JavaDeserializationStream {
     "void" -> classOf[Void]
   )
 }
-
+// 序列化类
 private[spark] class JavaSerializerInstance(
     counterReset: Int, extraDebugInfo: Boolean, defaultClassLoader: ClassLoader)
   extends SerializerInstance {
-
+  // 具体序列化方式
   override def serialize[T: ClassTag](t: T): ByteBuffer = {
+    // 缓冲区
     val bos = new ByteBufferOutputStream()
     val out = serializeStream(bos)
     out.writeObject(t)
@@ -107,7 +110,7 @@ private[spark] class JavaSerializerInstance(
     val in = deserializeStream(bis)
     in.readObject()
   }
-
+  // 反序列化方式
   override def deserialize[T: ClassTag](bytes: ByteBuffer, loader: ClassLoader): T = {
     val bis = new ByteBufferInputStream(bytes)
     val in = deserializeStream(bis, loader)
@@ -115,6 +118,7 @@ private[spark] class JavaSerializerInstance(
   }
 
   override def serializeStream(s: OutputStream): SerializationStream = {
+    // 序列化方式
     new JavaSerializationStream(s, counterReset, extraDebugInfo)
   }
 
@@ -144,6 +148,7 @@ class JavaSerializer(conf: SparkConf) extends Serializer with Externalizable {
 
   override def newInstance(): SerializerInstance = {
     val classLoader = defaultClassLoader.getOrElse(Thread.currentThread.getContextClassLoader)
+    // 创建 JavaSerializerInstance
     new JavaSerializerInstance(counterReset, extraDebugInfo, classLoader)
   }
 

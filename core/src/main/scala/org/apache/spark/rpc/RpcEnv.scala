@@ -55,6 +55,7 @@ private[spark] object RpcEnv {
     // 使用RpcEnvConfig吧参数封装起来
     val config = RpcEnvConfig(conf, name, bindAddress, advertiseAddress, port, securityManager,
       numUsableCores, clientMode)
+    // 此处会创建 server-即 master的rpc
     new NettyRpcEnvFactory().create(config) // 使用NettyRpcEnvFactory工厂类创建
   }
 }

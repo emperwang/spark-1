@@ -72,6 +72,7 @@ public class TransportServer implements Closeable {
 
     boolean shouldClose = true;
     try {
+      // 初始化
       init(hostToBind, portToBind);
       shouldClose = false;
     } finally {
@@ -98,7 +99,7 @@ public class TransportServer implements Closeable {
 
     PooledByteBufAllocator allocator = NettyUtils.createPooledByteBufAllocator(
       conf.preferDirectBufs(), true /* allowCache */, conf.serverThreads());
-
+    // netty Server的创建
     bootstrap = new ServerBootstrap()
       .group(bossGroup, workerGroup)
       .channel(NettyUtils.getServerChannelClass(ioMode))
@@ -120,7 +121,7 @@ public class TransportServer implements Closeable {
     if (conf.sendBuf() > 0) {
       bootstrap.childOption(ChannelOption.SO_SNDBUF, conf.sendBuf());
     }
-
+    // 添加自定义的 处理函数
     bootstrap.childHandler(new ChannelInitializer<SocketChannel>() {
       @Override
       protected void initChannel(SocketChannel ch) {
@@ -131,9 +132,10 @@ public class TransportServer implements Closeable {
         context.initializePipeline(ch, rpcHandler);
       }
     });
-
+    // 创建地址
     InetSocketAddress address = hostToBind == null ?
         new InetSocketAddress(portToBind): new InetSocketAddress(hostToBind, portToBind);
+    // 地址绑定
     channelFuture = bootstrap.bind(address);
     channelFuture.syncUninterruptibly();
 

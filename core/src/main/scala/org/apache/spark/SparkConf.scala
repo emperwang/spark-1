@@ -87,15 +87,18 @@ class SparkConf(loadDefaults: Boolean) extends Cloneable with Logging with Seria
   def set(key: String, value: String): SparkConf = {
     set(key, value, false)
   }
-
+  // 保存配置到setting
   private[spark] def set(key: String, value: String, silent: Boolean): SparkConf = {
+    // 监控性检查
     if (key == null) {
       throw new NullPointerException("null key")
     }
     if (value == null) {
       throw new NullPointerException("null value for " + key)
     }
+    // 是否打印已经 废弃的配置
     if (!silent) {
+      // 具体的打印操作
       logDeprecationWarning(key)
     }
     // 设置属性到 setting中
@@ -642,8 +645,10 @@ private[spark] object SparkConf extends Logging {
    *
    * The extra information is logged as a warning when the config is present in the user's
    * configuration.
+   *
    */
   private val deprecatedConfigs: Map[String, DeprecatedConfig] = {
+    // 创建已经废弃配置的 序列
     val configs = Seq(
       DeprecatedConfig("spark.cache.class", "0.8",
         "The spark.cache.class property is no longer being used! Specify storage levels using " +
@@ -664,7 +669,7 @@ private[spark] object SparkConf extends Logging {
       DeprecatedConfig("spark.yarn.credentials.file.retention.count", "2.4.0", "Not used anymore."),
       DeprecatedConfig("spark.yarn.credentials.file.retention.days", "2.4.0", "Not used anymore.")
     )
-
+    // 把创建的序列转换为map,DeprecatedConfig.key, value为 DeprecatedConfig
     Map(configs.map { cfg => (cfg.key -> cfg) } : _*)
   }
 
@@ -673,7 +678,7 @@ private[spark] object SparkConf extends Logging {
    *
    * The alternates are used in the order defined in this map. If deprecated configs are
    * present in the user's configuration, a warning is logged.
-   *
+   * 可选配置的初始化
    * TODO: consolidate it with `ConfigBuilder.withAlternative`.
    */
   private val configsWithAlternatives = Map[String, Seq[AlternateConfig]](
@@ -742,6 +747,7 @@ private[spark] object SparkConf extends Logging {
    *
    * Maps the deprecated config name to a 2-tuple (new config name, alternate config info).
    */
+  // allAlternatives 是configsWithAlternatives转换后的结果
   private val allAlternatives: Map[String, (String, AlternateConfig)] = {
     configsWithAlternatives.keys.flatMap { key =>
       configsWithAlternatives(key).map { cfg => (cfg.key -> (key -> cfg)) }
@@ -783,21 +789,24 @@ private[spark] object SparkConf extends Logging {
 
   /**
    * Logs a warning message if the given config key is deprecated.
+   * 打印废弃的配置
    */
   def logDeprecationWarning(key: String): Unit = {
+    // 已经废弃配置
     deprecatedConfigs.get(key).foreach { cfg =>
       logWarning(
         s"The configuration key '$key' has been deprecated as of Spark ${cfg.version} and " +
         s"may be removed in the future. ${cfg.deprecationMessage}")
       return
     }
-
+    // 打印可选的配置
     allAlternatives.get(key).foreach { case (newKey, cfg) =>
       logWarning(
         s"The configuration key '$key' has been deprecated as of Spark ${cfg.version} and " +
         s"may be removed in the future. Please use the new key '$newKey' instead.")
       return
     }
+    // 如果key为 spark.akka开头 或 spark.ssl.akka,则直接打印warnning
     if (key.startsWith("spark.akka") || key.startsWith("spark.ssl.akka")) {
       logWarning(
         s"The configuration key $key is not supported anymore " +

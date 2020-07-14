@@ -193,6 +193,7 @@ public class TransportClient implements Closeable {
     handler.addRpcRequest(requestId, callback);
 
     RpcChannelListener listener = new RpcChannelListener(requestId, callback);
+    // 发送消息
     channel.writeAndFlush(new RpcRequest(requestId, new NioManagedBuffer(message)))
       .addListener(listener);
 

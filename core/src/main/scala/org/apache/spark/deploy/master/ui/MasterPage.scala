@@ -53,13 +53,14 @@ private[ui] class MasterPage(parent: MasterWebUI) extends WebUIPage("") {
       master.ask[KillDriverResponse](RequestKillDriver(id))
     })
   }
-
+  // 处理 post 停止app的请求
   private def handleKillRequest(request: HttpServletRequest, action: String => Unit): Unit = {
     if (parent.killEnabled &&
         parent.master.securityMgr.checkModifyPermissions(request.getRemoteUser)) {
       // stripXSS is called first to remove suspicious characters used in XSS attacks
       val killFlag =
         Option(UIUtils.stripXSS(request.getParameter("terminate"))).getOrElse("false").toBoolean
+      // 停止一个App 可以看到需要添加 id的
       val id = Option(UIUtils.stripXSS(request.getParameter("id")))
       if (id.isDefined && killFlag) {
         action(id.get)

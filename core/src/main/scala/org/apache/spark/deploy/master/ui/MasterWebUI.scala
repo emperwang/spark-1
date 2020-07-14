@@ -35,14 +35,16 @@ class MasterWebUI(
 
   val masterEndpointRef = master.self
   val killEnabled = master.conf.getBoolean("spark.ui.killEnabled", true)
-
+  // 初始化
   initialize()
 
   /** Initialize all components of the server. */
+    // 初始化时,会添加 html页面
   def initialize() {
     val masterPage = new MasterPage(this)
     attachPage(new ApplicationPage(this))
     attachPage(masterPage)
+      // 添加一个Servlet来处理静态资源
     addStaticHandler(MasterWebUI.STATIC_RESOURCE_DIR)
     attachHandler(createRedirectHandler(
       "/app/kill", "/", masterPage.handleAppKillRequest, httpMethods = Set("POST")))
@@ -66,5 +68,6 @@ class MasterWebUI(
 }
 
 private[master] object MasterWebUI {
+  // 前台静态资源的 位置
   private val STATIC_RESOURCE_DIR = SparkUI.STATIC_RESOURCE_DIR
 }

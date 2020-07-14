@@ -155,6 +155,7 @@ private[spark] abstract class SparkUITab(parent: SparkUI, prefix: String)
 
 private[spark] object SparkUI {
   val DEFAULT_PORT = 4040
+  // 前台页面静态资源的位置
   val STATIC_RESOURCE_DIR = "org/apache/spark/ui/static"
   val DEFAULT_POOL_NAME = "default"
 
