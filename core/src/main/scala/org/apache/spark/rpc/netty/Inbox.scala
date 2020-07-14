@@ -100,6 +100,7 @@ private[netty] class Inbox(
         return
       }
     }
+    // 根据接收的消息的不同,来调用endpoint进行不同的处理
     while (true) {
       safelyCall(endpoint) {
         message match {

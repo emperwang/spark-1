@@ -162,6 +162,7 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
       }
       draining = true
     }
+    // 村换发送消息,直到把所有消息发送完毕
     while (true) {
       try {
         val _client = synchronized { client }

@@ -86,6 +86,7 @@ private[netty] class NettyRpcEnv(
   // to implement non-blocking send/ask.
   // TODO: a non-blocking TransportClientFactory.createClient in future
   // 客户端的连接线程池
+  // 和其他 节点连接的endpoint 都存储在这里
   private[netty] val clientConnectionExecutor = ThreadUtils.newDaemonCachedThreadPool(
     "netty-rpc-connection",
     conf.getInt("spark.rpc.connect.threads", 64))
@@ -185,15 +186,18 @@ private[netty] class NettyRpcEnv(
 
   private[netty] def send(message: RequestMessage): Unit = {
     val remoteAddr = message.receiver.address
+    // 如果接收者的地址 和自己相同,则发送给自己
     if (remoteAddr == address) {
       // Message to a local RPC endpoint.
       try {
+        // 发送给本地的 RPC
         dispatcher.postOneWayMessage(message)
       } catch {
         case e: RpcEnvStoppedException => logDebug(e.getMessage)
       }
     } else {
       // Message to a remote RPC endpoint.
+      // 否则,发送给对应的endpoint
       postToOutbox(message.receiver, OneWayOutboxMessage(message.serialize(this)))
     }
   }

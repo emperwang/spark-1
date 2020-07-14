@@ -48,81 +48,106 @@ private[deploy] class Master(
   // 创建了一个线程池
   private val forwardMessageThread =
     ThreadUtils.newDaemonSingleThreadScheduledExecutor("master-forward-message-thread")
-
+  // hadoop相关的配置
   private val hadoopConf = SparkHadoopUtil.get.newConfiguration(conf)
 
   // For application IDs
+  // 时间格式化 格式
   private def createDateFormat = new SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
   // 默认是  60s; woker的超时时间
   private val WORKER_TIMEOUT_MS = conf.getLong("spark.worker.timeout", 60) * 1000
+  // 保存的 application数量,默认是200
   private val RETAINED_APPLICATIONS = conf.getInt("spark.deploy.retainedApplications", 200)
+  // 保存的driver数量,默认是200
   private val RETAINED_DRIVERS = conf.getInt("spark.deploy.retainedDrivers", 200)
+  //
   private val REAPER_ITERATIONS = conf.getInt("spark.dead.worker.persistence", 15)
+  // HA 恢复的模式
   private val RECOVERY_MODE = conf.get("spark.deploy.recoveryMode", "NONE")
+  // executor 重试的次数
   private val MAX_EXECUTOR_RETRIES = conf.getInt("spark.deploy.maxExecutorRetries", 10)
-
+  // 所有的worker 信息
   val workers = new HashSet[WorkerInfo]
+  // id 到 app 的映射关系
   val idToApp = new HashMap[String, ApplicationInfo]
+  // 等待中的app的信息
   private val waitingApps = new ArrayBuffer[ApplicationInfo]
+  // 所有的app 信息
   val apps = new HashSet[ApplicationInfo]
-
+  // id 和 worker之间的映射关系
   private val idToWorker = new HashMap[String, WorkerInfo]
+  // rpc地址到 worker之间的映射关系
   private val addressToWorker = new HashMap[RpcAddress, WorkerInfo]
-
+  // RpcEndPoint 到  applicaiton 的映射关系
   private val endpointToApp = new HashMap[RpcEndpointRef, ApplicationInfo]
+  // rpc 地址到 application的映射关系
   private val addressToApp = new HashMap[RpcAddress, ApplicationInfo]
+  // 完成的 application的容器
   private val completedApps = new ArrayBuffer[ApplicationInfo]
+  // 下一个app的 序列号
   private var nextAppNumber = 0
-
+  // 所有的driver的信息
   private val drivers = new HashSet[DriverInfo]
+  // 所有完成的driver的信息
   private val completedDrivers = new ArrayBuffer[DriverInfo]
   // Drivers currently spooled for scheduling
+  // 等待中的driver的信息
   private val waitingDrivers = new ArrayBuffer[DriverInfo]
+  // 下一个driver的序列号
   private var nextDriverNumber = 0
-
+  // host地址的检测
   Utils.checkHost(address.host)
-
+  //
   private val masterMetricsSystem = MetricsSystem.createMetricsSystem("master", conf, securityMgr)
   private val applicationMetricsSystem = MetricsSystem.createMetricsSystem("applications", conf,
     securityMgr)
+  // masterSource 对当前Master的包装
   private val masterSource = new MasterSource(this)
 
   // After onStart, webUi will be set
   private var webUi: MasterWebUI = null
-
+  // master的地址
   private val masterPublicAddress = {
     val envVar = conf.getenv("SPARK_PUBLIC_DNS")
     if (envVar != null) envVar else address.host
   }
-
+  // master的url
   private val masterUrl = address.toSparkURL
+  // _ 表示默认初始值;
   private var masterWebUiUrl: String = _
-
+  // 初始状态,为 STANDBY
   private var state = RecoveryState.STANDBY
-
+  // 序列化引擎
   private var persistenceEngine: PersistenceEngine = _
-
+  // leader 选举
   private var leaderElectionAgent: LeaderElectionAgent = _
-
+  // 恢复的 task
   private var recoveryCompletionTask: ScheduledFuture[_] = _
-
+  // 检测 worker是否超时的 task
   private var checkForWorkerTimeOutTask: ScheduledFuture[_] = _
 
   // As a temporary workaround before better ways of configuring memory, we allow users to set
   // a flag that will perform round-robin scheduling across the nodes (spreading out each app
   // among all the nodes) instead of trying to consolidate each app onto a small # of nodes.
+  // 在有更好配置内存方法前的临时方法, 允许用户设置一个flag, 该flag会使能在所有节点上循环调度app,
+  // 而不是把app整合在一个小的 节点上
   private val spreadOutApps = conf.getBoolean("spark.deploy.spreadOut", true)
 
   // Default maxCores for applications that don't specify it (i.e. pass Int.MaxValue)
+  // 默认可用的 core 核数
   private val defaultCores = conf.getInt("spark.deploy.defaultCores", Int.MaxValue)
+  // 反向代理
   val reverseProxy = conf.getBoolean("spark.ui.reverseProxy", false)
   if (defaultCores < 1) {
     throw new SparkException("spark.deploy.defaultCores must be positive")
   }
 
   // Alternative application submission gateway that is stable across Spark versions
+  // 是否使用 restServer; 提供给外部通过 REST api的方式来提交任务
   private val restServerEnabled = conf.getBoolean("spark.master.rest.enabled", false)
+  // restServer
   private var restServer: Option[StandaloneRestServer] = None
+  // restServer绑定的端口
   private var restServerBoundPort: Option[Int] = None
 
   {
@@ -162,6 +187,7 @@ private[deploy] class Master(
       val port = conf.getInt("spark.master.rest.port", 6066)
       restServer = Some(new StandaloneRestServer(address.host, port, conf, self, masterUrl))
     }
+    // rest Server的启动
     restServerBoundPort = restServer.map(_.start())
     // 监测 系统
     masterMetricsSystem.registerSource(masterSource)
@@ -1089,9 +1115,13 @@ private[deploy] object Master extends Logging {
       conf: SparkConf): (RpcEnv, Int, Option[Int]) = {
     val securityMgr = new SecurityManager(conf)
     // 创建rpcEnv
+    // 1. 创建 jetty server
+    // 2. dispatcher 用于分发消息
+    // 3. 创建 master rpc server
     val rpcEnv = RpcEnv.create(SYSTEM_NAME, host, port, conf, securityMgr)
     // 设置 endPoint; 也就是把 Master注册到 dispatcher
     // 这里真正创建了Master
+    // 注册 master的RpcEndpoint 到 dispatcher
     val masterEndpoint = rpcEnv.setupEndpoint(ENDPOINT_NAME,
       new Master(rpcEnv, rpcEnv.address, webUiPort, securityMgr, conf))
     // MasterEndpoint 发送消息
