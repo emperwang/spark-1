@@ -67,7 +67,7 @@ private[spark] object JettyUtils extends Logging {
 
   implicit def textResponderToServlet(responder: Responder[String]): ServletParams[String] =
     new ServletParams(responder, "text/plain")
-
+  // 创建servlet
   def createServlet[T <: AnyRef](
       servletParams: ServletParams[T],
       securityMgr: SecurityManager,

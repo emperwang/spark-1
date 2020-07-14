@@ -94,6 +94,7 @@ private[spark] abstract class WebUI(
       (request: HttpServletRequest) => page.renderJson(request), securityManager, conf, basePath)
     attachHandler(renderHandler)
     attachHandler(renderJsonHandler)
+    // 记录起来此 page对应的handler
     val handlers = pageToHandlers.getOrElseUpdate(page, ArrayBuffer[ServletContextHandler]())
     handlers += renderHandler
     handlers += renderJsonHandler

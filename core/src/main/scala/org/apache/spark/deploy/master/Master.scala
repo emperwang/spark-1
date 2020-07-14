@@ -187,9 +187,9 @@ private[deploy] class Master(
       val port = conf.getInt("spark.master.rest.port", 6066)
       restServer = Some(new StandaloneRestServer(address.host, port, conf, self, masterUrl))
     }
-    // rest Server的启动
+    // rest Server的启动, 通过REST api 来提交任务
     restServerBoundPort = restServer.map(_.start())
-    // 监测 系统
+    // 监测 系统 的启动
     masterMetricsSystem.registerSource(masterSource)
     masterMetricsSystem.start()
     applicationMetricsSystem.start()
@@ -1115,9 +1115,8 @@ private[deploy] object Master extends Logging {
       conf: SparkConf): (RpcEnv, Int, Option[Int]) = {
     val securityMgr = new SecurityManager(conf)
     // 创建rpcEnv
-    // 1. 创建 jetty server
-    // 2. dispatcher 用于分发消息
-    // 3. 创建 master rpc server
+    // 1. dispatcher 用于分发消息
+    // 2. 创建 master rpc server
     val rpcEnv = RpcEnv.create(SYSTEM_NAME, host, port, conf, securityMgr)
     // 设置 endPoint; 也就是把 Master注册到 dispatcher
     // 这里真正创建了Master

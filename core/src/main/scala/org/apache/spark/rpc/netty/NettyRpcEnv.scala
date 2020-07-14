@@ -130,7 +130,7 @@ private[netty] class NettyRpcEnv(
   override lazy val address: RpcAddress = {
     if (server != null) RpcAddress(host, server.getPort()) else null
   }
-
+  // 注册EndPoint
   override def setupEndpoint(name: String, endpoint: RpcEndpoint): RpcEndpointRef = {
     dispatcher.registerRpcEndpoint(name, endpoint)
   }
