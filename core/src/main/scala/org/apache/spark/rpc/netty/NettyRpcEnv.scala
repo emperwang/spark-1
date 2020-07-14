@@ -67,7 +67,7 @@ private[netty] class NettyRpcEnv(
       java.util.Collections.emptyList[TransportClientBootstrap]
     }
   }
-
+  // 创建客户端连接的工厂方法
   private val clientFactory = transportContext.createClientFactory(createClientBootstraps())
 
   /**
@@ -90,9 +90,9 @@ private[netty] class NettyRpcEnv(
   private[netty] val clientConnectionExecutor = ThreadUtils.newDaemonCachedThreadPool(
     "netty-rpc-connection",
     conf.getInt("spark.rpc.connect.threads", 64))
-
+  // master rpc server
   @volatile private var server: TransportServer = _
-
+  // 关闭的标志
   private val stopped = new AtomicBoolean(false)
 
   /**
@@ -669,7 +669,7 @@ private[netty] class NettyRpcHandler(
     // 通过dispatcher把消息放到 目的 endpoint的 Inbox中
     dispatcher.postRemoteMessage(messageToDispatch, callback)
   }
-
+  // 消息接收
   override def receive(
       client: TransportClient,
       message: ByteBuffer): Unit = {
@@ -697,7 +697,7 @@ private[netty] class NettyRpcHandler(
   }
 
   override def getStreamManager: StreamManager = streamManager
-
+  // 异常发生时  发送异常消息到所有的 endpoint
   override def exceptionCaught(cause: Throwable, client: TransportClient): Unit = {
     val addr = client.getChannel.remoteAddress().asInstanceOf[InetSocketAddress]
     if (addr != null) {
@@ -716,14 +716,14 @@ private[netty] class NettyRpcHandler(
       logError("Exception before connecting to the client", cause)
     }
   }
-
+  // 当有连接加入时, 把RemoteProcessConnected 消息广播一下
   override def channelActive(client: TransportClient): Unit = {
     val addr = client.getChannel().remoteAddress().asInstanceOf[InetSocketAddress]
     assert(addr != null)
     val clientAddr = RpcAddress(addr.getHostString, addr.getPort)
     dispatcher.postToAll(RemoteProcessConnected(clientAddr))
   }
-
+  // 当连接失效时 广播消息 RemoteProcessDisconnected
   override def channelInactive(client: TransportClient): Unit = {
     val addr = client.getChannel.remoteAddress().asInstanceOf[InetSocketAddress]
     if (addr != null) {

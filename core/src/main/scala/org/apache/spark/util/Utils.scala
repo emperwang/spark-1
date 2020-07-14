@@ -2259,6 +2259,7 @@ private[spark] object Utils extends Logging {
       "startPort should be between 1024 and 65535 (inclusive), or 0 for a random free port.")
 
     val serviceString = if (serviceName.isEmpty) "" else s" '$serviceName'"
+    // 端口的重试次数
     val maxRetries = portMaxRetries(conf)
     for (offset <- 0 to maxRetries) {
       // Do not increment port if startPort is 0, which is treated as a special port
@@ -2268,6 +2269,7 @@ private[spark] object Utils extends Logging {
         userPort(startPort, offset)
       }
       try {
+        // 调用回调方法来启动 rpcServer
         val (service, port) = startService(tryPort)
         logInfo(s"Successfully started service$serviceString on port $port.")
         return (service, port)
