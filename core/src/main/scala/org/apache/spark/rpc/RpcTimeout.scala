@@ -121,12 +121,15 @@ private[spark] object RpcTimeout {
     require(timeoutPropList.nonEmpty)
 
     // Find the first set property or use the default value with the first property
+    // timeoutPropList 配置项的key
     val itr = timeoutPropList.iterator
     var foundProp: Option[(String, String)] = None
+    // 此while循环, 获取第一个有值的配置项
     while (itr.hasNext && foundProp.isEmpty) {
       val propKey = itr.next()
       conf.getOption(propKey).foreach { prop => foundProp = Some((propKey, prop)) }
     }
+    // 获取值,没有值 则使用默认值
     val finalProp = foundProp.getOrElse((timeoutPropList.head, defaultValue))
     val timeout = { Utils.timeStringAsSeconds(finalProp._2).seconds }
     new RpcTimeout(timeout, finalProp._1)

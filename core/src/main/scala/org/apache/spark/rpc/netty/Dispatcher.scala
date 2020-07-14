@@ -138,10 +138,12 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
   }
 
   /** Posts a message sent by a local endpoint. */
+  // 发送消息到 本地
   def postLocalMessage(message: RequestMessage, p: Promise[Any]): Unit = {
     val rpcCallContext =
       new LocalNettyRpcCallContext(message.senderAddress, p)
     val rpcMessage = RpcMessage(message.senderAddress, message.content, rpcCallContext)
+    // 发送消息
     postMessage(message.receiver.name, rpcMessage, (e) => p.tryFailure(e))
   }
 
@@ -158,6 +160,7 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
    * @param endpointName name of the endpoint.
    * @param message the message to post
    * @param callbackIfStopped callback function if the endpoint is stopped.
+   * 发送消息
    */
   private def postMessage(
       endpointName: String,

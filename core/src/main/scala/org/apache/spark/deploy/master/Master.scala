@@ -1124,7 +1124,7 @@ private[deploy] object Master extends Logging {
     // 注册 master的RpcEndpoint 到 dispatcher
     val masterEndpoint = rpcEnv.setupEndpoint(ENDPOINT_NAME,
       new Master(rpcEnv, rpcEnv.address, webUiPort, securityMgr, conf))
-    // MasterEndpoint 发送消息
+    // MasterEndpoint 发送消息 BoundPortsRequest  端口绑定请求
     val portsResponse = masterEndpoint.askSync[BoundPortsResponse](BoundPortsRequest)
     (rpcEnv, portsResponse.webUIPort, portsResponse.restPort)
   }

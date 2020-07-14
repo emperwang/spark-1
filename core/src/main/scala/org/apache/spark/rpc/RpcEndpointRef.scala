@@ -29,9 +29,11 @@ import org.apache.spark.util.RpcUtils
  */
 private[spark] abstract class RpcEndpointRef(conf: SparkConf)
   extends Serializable with Logging {
-
+  // 最大的重试次数
   private[this] val maxRetries = RpcUtils.numRetries(conf)
+  // 重试的等待时间
   private[this] val retryWaitMs = RpcUtils.retryWaitMs(conf)
+  // 默认的发送消息后 等待回复的超时时间
   private[this] val defaultAskTimeout = RpcUtils.askRpcTimeout(conf)
 
   /**
@@ -73,6 +75,7 @@ private[spark] abstract class RpcEndpointRef(conf: SparkConf)
    * @tparam T type of the reply message
    * @return the reply message from the corresponding [[RpcEndpoint]]
    */
+    // 发送消息, 默认超时时间为 defaultAskTimeout
   def askSync[T: ClassTag](message: Any): T = askSync(message, defaultAskTimeout)
 
   /**

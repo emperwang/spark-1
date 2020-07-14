@@ -116,6 +116,7 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
    * Send a message. If there is no active connection, cache it and launch a new connection. If
    * [[Outbox]] is stopped, the sender will be notified with a [[SparkException]].
    */
+    // 发送消息到 外部的 box
   def send(message: OutboxMessage): Unit = {
     val dropped = synchronized {
       if (stopped) {
@@ -128,6 +129,7 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
     if (dropped) {
       message.onFailure(new SparkException("Message is dropped because Outbox is stopped"))
     } else {
+      // 具体的消息发送
       drainOutbox()
     }
   }
@@ -149,6 +151,7 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
       }
       if (client == null) {
         // There is no connect task but client is null, so we need to launch the connect task.
+        // 创建client
         launchConnectTask()
         return
       }
@@ -216,6 +219,7 @@ private[netty] class Outbox(nettyEnv: NettyRpcEnv, val address: RpcAddress) {
         outbox.synchronized { connectFuture = null }
         // It's possible that no thread is draining now. If we don't drain here, we cannot send the
         // messages until the next message arrives.
+        // 创建好了client 再次进行消息的发送
         drainOutbox()
       }
     })
