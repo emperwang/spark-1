@@ -92,7 +92,8 @@ abstract class AbstractCommandBuilder {
   List<String> buildJavaCommand(String extraClassPath) throws IOException {
     List<String> cmd = new ArrayList<>();
     String envJavaHome;
-
+    // 构建java命令的全路径
+    // 构建后如: /opt/jdk/bin/java
     if (javaHome != null) {
       cmd.add(join(File.separator, javaHome, "bin", "java"));
     } else if ((envJavaHome = System.getenv("JAVA_HOME")) != null) {
@@ -102,18 +103,21 @@ abstract class AbstractCommandBuilder {
     }
 
     // Load extra JAVA_OPTS from conf/java-opts, if it exists.
+    // getConfDir获取配置目录,最后添加上java-opts,就是读取配置目录中的 java-opts
     File javaOpts = new File(join(File.separator, getConfDir(), "java-opts"));
     if (javaOpts.isFile()) {
       try (BufferedReader br = new BufferedReader(new InputStreamReader(
           new FileInputStream(javaOpts), StandardCharsets.UTF_8))) {
         String line;
-        while ((line = br.readLine()) != null) {
+        while ((line = br.readLine()) != null) {  // 把从 java-opts文件中读取的配置, 添加到cmd中
           addOptionString(cmd, line);
         }
       }
     }
 
     cmd.add("-cp");
+    // 设置classpath
+    // buildClassPath 构建运行的 classpath
     cmd.add(join(File.pathSeparator, buildClassPath(extraClassPath)));
     return cmd;
   }
@@ -135,13 +139,16 @@ abstract class AbstractCommandBuilder {
     String sparkHome = getSparkHome();
 
     Set<String> cp = new LinkedHashSet<>();
+    // 把 SPARK_DAEMON_CLASSPATH 设置的路径添加进来
     addToClassPath(cp, appClassPath);
-
+    // 把配置文件目录添加进来
     addToClassPath(cp, getConfDir());
-
+    //
     boolean prependClasses = !isEmpty(getenv("SPARK_PREPEND_CLASSES"));
     boolean isTesting = "1".equals(getenv("SPARK_TESTING"));
+    // 测试使用的选项
     if (prependClasses || isTesting) {
+      // scala 版本
       String scala = getScalaVersion();
       List<String> projects = Arrays.asList(
         "common/kvstore",
@@ -197,7 +204,7 @@ abstract class AbstractCommandBuilder {
     if (jarsDir != null) {
       addToClassPath(cp, join(File.separator, jarsDir, "*"));
     }
-
+    // 把hadoop 和yarn的配置文件目录 添加进 classpath, 如果存在的话
     addToClassPath(cp, getenv("HADOOP_CONF_DIR"));
     addToClassPath(cp, getenv("YARN_CONF_DIR"));
     addToClassPath(cp, getenv("SPARK_DIST_CLASSPATH"));

@@ -34,7 +34,7 @@ class SparkClassCommandBuilder extends AbstractCommandBuilder {
 
   private final String className;
   private final List<String> classArgs;
-
+  // 参数分别是: 要操作的class类, 以及 参数
   SparkClassCommandBuilder(String className, List<String> classArgs) {
     this.className = className;
     this.classArgs = classArgs;
@@ -49,6 +49,7 @@ class SparkClassCommandBuilder extends AbstractCommandBuilder {
 
     // Master, Worker, HistoryServer, ExternalShuffleService, MesosClusterDispatcher use
     // SPARK_DAEMON_JAVA_OPTS (and specific opts) + SPARK_DAEMON_MEMORY.
+    // 根据不同的类, 来创建不同的 变量
     switch (className) {
       case "org.apache.spark.deploy.master.Master":
         javaOptsKeys.add("SPARK_DAEMON_JAVA_OPTS");
@@ -94,9 +95,9 @@ class SparkClassCommandBuilder extends AbstractCommandBuilder {
         memKey = "SPARK_DRIVER_MEMORY";
         break;
     }
-
+    // 构建java 运行格式的命令
     List<String> cmd = buildJavaCommand(extraClassPath);
-
+    // 获取javaOptsKeys 配置项的值,遍历并添加到  cmd中
     for (String key : javaOptsKeys) {
       String envValue = System.getenv(key);
       if (!isEmpty(envValue) && envValue.contains("Xmx")) {
@@ -106,10 +107,13 @@ class SparkClassCommandBuilder extends AbstractCommandBuilder {
       }
       addOptionString(cmd, envValue);
     }
-
+    // 获取设定的内存
     String mem = firstNonEmpty(memKey != null ? System.getenv(memKey) : null, DEFAULT_MEM);
+    // 最大内存
     cmd.add("-Xmx" + mem);
+    // class的全限定类名
     cmd.add(className);
+    // 参数
     cmd.addAll(classArgs);
     return cmd;
   }

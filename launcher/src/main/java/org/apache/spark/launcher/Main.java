@@ -53,15 +53,22 @@ class Main {
    * character. On Windows, the output is a command line suitable for direct execution from the
    * script.
    */
+  // 启动Master的的命令
+  // java -Xmx128m -cp '/mnt/spark-alone/spark-2.4.6-bin-hadoop2.6/jars/*'
+  // org.apache.spark.launcher.Main org.apache.spark.deploy.master.Master --host name2 --port 7077 --webui-port 8080
   public static void main(String[] argsArray) throws Exception {
+    // 参数的个数检测
     checkArgument(argsArray.length > 0, "Not enough arguments: missing class name.");
-
+    // 把命令行传递的参数 封装到一个 list中
     List<String> args = new ArrayList<>(Arrays.asList(argsArray));
+    // 要操作的类
     String className = args.remove(0);
-
+    //  是否打印 命令
     boolean printLaunchCommand = !isEmpty(System.getenv("SPARK_PRINT_LAUNCH_COMMAND"));
     Map<String, String> env = new HashMap<>();
     List<String> cmd;
+    // 如果操作的类是 SparkSubmit, 说明是提交任务
+    // 这个先放到后面, 等分析到 SparkSubmit 再进行分析
     if (className.equals("org.apache.spark.deploy.SparkSubmit")) {
       try {
         AbstractCommandBuilder builder = new SparkSubmitCommandBuilder(args);
@@ -87,19 +94,24 @@ class Main {
         AbstractCommandBuilder builder = new SparkSubmitCommandBuilder(help);
         cmd = buildCommand(builder, env, printLaunchCommand);
       }
-    } else {
+    } else {  // spark-class的操作
+      //
       AbstractCommandBuilder builder = new SparkClassCommandBuilder(className, args);
+      // 创建命令
       cmd = buildCommand(builder, env, printLaunchCommand);
     }
-
+    // 如果是windows系统,则进行此操作
     if (isWindows()) {
       System.out.println(prepareWindowsCommand(cmd, env));
     } else {
+      // 不是windows系统,则进行此操作
       // In bash, use NULL as the arg separator since it cannot be used in an argument.
+      // 针对unix系统,对构建好的命令,
       List<String> bashCmd = prepareBashCommand(cmd, env);
+      // 把构建好的命令打印到终端
       for (String c : bashCmd) {
         System.out.print(c);
-        System.out.print('\0');
+        System.out.print('\0'); // \0 字符串的结束符
       }
     }
   }
@@ -112,7 +124,9 @@ class Main {
       AbstractCommandBuilder builder,
       Map<String, String> env,
       boolean printLaunchCommand) throws IOException, IllegalArgumentException {
+    // 调用builder 来构建命令
     List<String> cmd = builder.buildCommand(env);
+    // 如果设置了打印命令,则把构建好的命令 打印到终端
     if (printLaunchCommand) {
       System.err.println("Spark Command: " + join(" ", cmd));
       System.err.println("========================================");
@@ -151,7 +165,13 @@ class Main {
 
     List<String> newCmd = new ArrayList<>();
     newCmd.add("env");
-
+    // jvm参数的构建
+    // 最终的命令
+    //exec /usr/lib/jvm/java-1.8.0-openjdk-1.8.0.232.b09-0.el7_7.x86_64/bin/java -cp
+    // '/mnt/spark-alone/spark-2.4.6-bin-hadoop2.6/conf/:/mnt/spark-alone/spark-2.4.6-bin-hadoop2.6/jars/*'
+    // -Dspark.deploy.recoveryMode=ZOOKEEPER -Dspark.deploy.zookeeper.url=name2:2181,name3:2181,name4:2181
+    // -Dspark.deploy.zookeeper.dir=/spark-cluster
+    //        -Xmx1g org.apache.spark.deploy.master.Master --host name2 --port 7077 --webui-port 8080
     for (Map.Entry<String, String> e : childEnv.entrySet()) {
       newCmd.add(String.format("%s=%s", e.getKey(), e.getValue()));
     }
