@@ -61,17 +61,20 @@ private[deploy] class Worker(
   assert (port > 0)
 
   // A scheduled executor used to send messages at the specified time.
+  // 单线程 定时线程池,用于在特定时间发送消息
   private val forwordMessageScheduler =
     ThreadUtils.newDaemonSingleThreadScheduledExecutor("worker-forward-message-scheduler")
 
   // A separated thread to clean up the workDir and the directories of finished applications.
   // Used to provide the implicit parameter of `Future` methods.
+  // 清除 workDir and the directories of finished applications 的线程
   private val cleanupThreadExecutor = ExecutionContext.fromExecutorService(
     ThreadUtils.newDaemonSingleThreadExecutor("worker-cleanup-thread"))
 
   // For worker and executor IDs
   private def createDateFormat = new SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
   // Send a heartbeat every (heartbeat timeout) / 4 milliseconds
+  // 默认 worker 每15s 发送一个心跳
   private val HEARTBEAT_MILLIS = conf.getLong("spark.worker.timeout", 60) * 1000 / 4
 
   // Model retries to connect to the master, after Hadoop's model.
@@ -90,20 +93,24 @@ private[deploy] class Worker(
     REGISTRATION_RETRY_FUZZ_MULTIPLIER))
   private val PROLONGED_REGISTRATION_RETRY_INTERVAL_SECONDS = (math.round(60
     * REGISTRATION_RETRY_FUZZ_MULTIPLIER))
-
+  // 默认 不对 worker 进行清除
   private val CLEANUP_ENABLED = conf.getBoolean("spark.worker.cleanup.enabled", false)
   // How often worker will clean up old app folders
+  // 清除worker的 间隔 30m
   private val CLEANUP_INTERVAL_MILLIS =
     conf.getLong("spark.worker.cleanup.interval", 60 * 30) * 1000
   // TTL for app folders/data;  after TTL expires it will be cleaned up
+  // app data的清除间隔  7天
   private val APP_DATA_RETENTION_SECONDS =
     conf.getLong("spark.worker.cleanup.appDataTtl", 7 * 24 * 3600)
 
   // Whether or not cleanup the non-shuffle files on executor exits.
+  // 默认使能 清除shuffle 文件
   private val CLEANUP_NON_SHUFFLE_FILES_ENABLED =
     conf.getBoolean("spark.storage.cleanupFilesAfterExecutorExit", true)
-
+  // 是否是 测试
   private val testing: Boolean = sys.props.contains("spark.testing")
+  // 记录 master的endpoint
   private var master: Option[RpcEndpointRef] = None
 
   /**
@@ -118,14 +125,23 @@ private[deploy] class Worker(
    * a master is restarted or takes over leadership, it will be an address sent from master, which
    * may not be in `masterRpcAddresses`.
    */
+  // master的地址
   private var masterAddressToConnect: Option[RpcAddress] = None
+  // active的master的地址
   private var activeMasterUrl: String = ""
+  // active 的master的weburl
   private[worker] var activeMasterWebUiUrl : String = ""
+  // worker的weburl
   private var workerWebUiUrl: String = ""
+  // worker的url
   private val workerUri = RpcEndpointAddress(rpcEnv.address, endpointName).toString
+  // 是否注册
   private var registered = false
+  //
   private var connected = false
+  // workerid
   private val workerId = generateWorkerId()
+  // sparkHome的设置
   private val sparkHome =
     if (testing) {
       assert(sys.props.contains("spark.test.home"), "spark.test.home is not set!")
@@ -133,21 +149,29 @@ private[deploy] class Worker(
     } else {
       new File(sys.env.get("SPARK_HOME").getOrElse("."))
     }
-
+  // 工作目录
   var workDir: File = null
+  // 完成的 executor
   val finishedExecutors = new LinkedHashMap[String, ExecutorRunner]
+  // driver的信息
   val drivers = new HashMap[String, DriverRunner]
+  // executor 的信息
   val executors = new HashMap[String, ExecutorRunner]
+  // 完成的 driver的信息
   val finishedDrivers = new LinkedHashMap[String, DriverRunner]
+  // app的目录信息
   val appDirectories = new HashMap[String, Seq[String]]
+  // 完成的app
   val finishedApps = new HashSet[String]
-
+  // 保存的 executor数量
   val retainedExecutors = conf.getInt("spark.worker.ui.retainedExecutors",
     WorkerWebUI.DEFAULT_RETAINED_EXECUTORS)
+  // 保留的 driver的数量
   val retainedDrivers = conf.getInt("spark.worker.ui.retainedDrivers",
     WorkerWebUI.DEFAULT_RETAINED_DRIVERS)
 
   // The shuffle service is not actually started unless configured.
+  // shuffle 服务
   private val shuffleService = if (externalShuffleServiceSupplier != null) {
     externalShuffleServiceSupplier.get()
   } else {
@@ -158,11 +182,13 @@ private[deploy] class Worker(
     val envVar = conf.getenv("SPARK_PUBLIC_DNS")
     if (envVar != null) envVar else host
   }
+  // worker webui
   private var webUi: WorkerWebUI = null
-
+  // 连接的已尝试次数
   private var connectionAttemptCount = 0
-
+  // 检测系统
   private val metricsSystem = MetricsSystem.createMetricsSystem("worker", conf, securityMgr)
+  // 使用WorkerSource 包装 Worker
   private val workerSource = new WorkerSource(this)
 
   val reverseProxy = conf.getBoolean("spark.ui.reverseProxy", false)
@@ -173,17 +199,20 @@ private[deploy] class Worker(
   // A thread pool for registering with masters. Because registering with a master is a blocking
   // action, this thread pool must be able to create "masterRpcAddresses.size" threads at the same
   // time so that we can register with all masters.
+  // 注册到 master的操作
   private val registerMasterThreadPool = ThreadUtils.newDaemonCachedThreadPool(
     "worker-register-master-threadpool",
     masterRpcAddresses.length // Make sure we can register with all masters at the same time
   )
-
+  // 已使用的核数
   var coresUsed = 0
+  // 已使用的 内存数
   var memoryUsed = 0
-
+  // 空闲的 核数
   def coresFree: Int = cores - coresUsed
+  // 空闲的 内存
   def memoryFree: Int = memory - memoryUsed
-
+  // 常见 workeDir
   private def createWorkDir() {
     workDir = Option(workDirPath).map(new File(_)).getOrElse(new File(sparkHome, "work"))
     try {
@@ -208,14 +237,18 @@ private[deploy] class Worker(
       host, port, cores, Utils.megabytesToString(memory)))
     logInfo(s"Running Spark version ${org.apache.spark.SPARK_VERSION}")
     logInfo("Spark home: " + sparkHome)
+    // 常见worker 目录
     createWorkDir()
+    // 启动shuffle 服务
     startExternalShuffleService()
+    // webUi的绑定
     webUi = new WorkerWebUI(this, workDir, webUiPort)
     webUi.bind()
 
     workerWebUiUrl = s"http://$publicAddress:${webUi.boundPort}"
+    // 向master进行注册
     registerWithMaster()
-
+    // 监控系统的 启动
     metricsSystem.registerSource(workerSource)
     metricsSystem.start()
     // Attach the worker metrics servlet handler to the web ui after the metrics system is started.
@@ -243,7 +276,7 @@ private[deploy] class Worker(
     // Cancel any outstanding re-registration attempts because we found a new master
     cancelLastRegistrationRetry()
   }
-
+  // 向所有master注册
   private def tryRegisterAllMasters(): Array[JFuture[_]] = {
     masterRpcAddresses.map { masterAddress =>
       registerMasterThreadPool.submit(new Runnable {
@@ -251,6 +284,7 @@ private[deploy] class Worker(
           try {
             logInfo("Connecting to master " + masterAddress + "...")
             val masterEndpoint = rpcEnv.setupEndpointRef(masterAddress, Master.ENDPOINT_NAME)
+            // 向master注册
             sendRegisterMessageToMaster(masterEndpoint)
           } catch {
             case ie: InterruptedException => // Cancelled
@@ -360,8 +394,10 @@ private[deploy] class Worker(
     registrationRetryTimer match {
       case None =>
         registered = false
+        // 向所有master注册
         registerMasterFutures = tryRegisterAllMasters()
         connectionAttemptCount = 0
+        // 注册,就是发送ReregisterWithMaster 消息
         registrationRetryTimer = Some(forwordMessageScheduler.scheduleAtFixedRate(
           new Runnable {
             override def run(): Unit = Utils.tryLogNonFatalError {
@@ -386,7 +422,7 @@ private[deploy] class Worker(
         System.exit(1)
     }
   }
-
+  // 发送注册信息
   private def sendRegisterMessageToMaster(masterEndpoint: RpcEndpointRef): Unit = {
     masterEndpoint.send(RegisterWorker(
       workerId,
@@ -490,8 +526,9 @@ private[deploy] class Worker(
     case ReconnectWorker(masterUrl) =>
       logInfo(s"Master with url $masterUrl requested this worker to reconnect.")
       registerWithMaster()
-
+    // 在worker上启动executor
     case LaunchExecutor(masterUrl, appId, execId, appDesc, cores_, memory_) =>
+      // 如果不是有效的 master发送过来的任务,则 打印warning
       if (masterUrl != activeMasterUrl) {
         logWarning("Invalid Master (" + masterUrl + ") attempted to launch executor.")
       } else {
@@ -499,6 +536,7 @@ private[deploy] class Worker(
           logInfo("Asked to launch executor %s/%d for %s".format(appId, execId, appDesc.name))
 
           // Create the executor's working directory
+          // 创建工作目录
           val executorDir = new File(workDir, appId + "/" + execId)
           if (!executorDir.mkdirs()) {
             throw new IOException("Failed to create directory " + executorDir)
@@ -507,6 +545,7 @@ private[deploy] class Worker(
           // Create local dirs for the executor. These are passed to the executor via the
           // SPARK_EXECUTOR_DIRS environment variable, and deleted by the Worker when the
           // application finishes.
+          // app 目录
           val appLocalDirs = appDirectories.getOrElse(appId, {
             val localRootDirs = Utils.getOrCreateLocalRootDirs(conf)
             val dirs = localRootDirs.flatMap { dir =>
@@ -526,7 +565,9 @@ private[deploy] class Worker(
             }
             dirs
           })
+          // 记录 app的目录
           appDirectories(appId) = appLocalDirs
+          // 创建 executorRunner 来启动 executor
           val manager = new ExecutorRunner(
             appId,
             execId,
@@ -543,10 +584,14 @@ private[deploy] class Worker(
             workerUri,
             conf,
             appLocalDirs, ExecutorState.RUNNING)
+          // 记录创建的 executor
           executors(appId + "/" + execId) = manager
+          // 启动创建的executor
           manager.start()
+          // 增加使用的 核数 和 内存
           coresUsed += cores_
           memoryUsed += memory_
+          // 回复ExecutorStateChanged 消息
           sendToMaster(ExecutorStateChanged(appId, execId, manager.state, None, None))
         } catch {
           case e: Exception =>
@@ -576,9 +621,10 @@ private[deploy] class Worker(
             logInfo("Asked to kill unknown executor " + fullId)
         }
       }
-
+    // master发送过来的启动 driver的消息
     case LaunchDriver(driverId, driverDesc) =>
       logInfo(s"Asked to launch driver $driverId")
+      // 使用DriverRunner 封装要运行的driver的信息
       val driver = new DriverRunner(
         conf,
         driverId,
@@ -588,9 +634,11 @@ private[deploy] class Worker(
         self,
         workerUri,
         securityMgr)
+      // 保存创建的 DriverRunner
       drivers(driverId) = driver
+      // driverde启动
       driver.start()
-
+      // 已经的核数 和 内存 增加
       coresUsed += driverDesc.cores
       memoryUsed += driverDesc.mem
 
@@ -605,7 +653,7 @@ private[deploy] class Worker(
 
     case driverStateChanged @ DriverStateChanged(driverId, state, exception) =>
       handleDriverStateChanged(driverStateChanged)
-
+    // 再次向master注册
     case ReregisterWithMaster =>
       reregisterWithMaster()
 
@@ -764,18 +812,23 @@ private[deploy] class Worker(
     }
   }
 }
-
+// slave 的启动类
 private[deploy] object Worker extends Logging {
   val SYSTEM_NAME = "sparkWorker"
   val ENDPOINT_NAME = "Worker"
   private val SSL_NODE_LOCAL_CONFIG_PATTERN = """\-Dspark\.ssl\.useNodeLocalConf\=(.+)""".r
 
   def main(argStrings: Array[String]) {
+    // 未捕获异常的处理函数
     Thread.setDefaultUncaughtExceptionHandler(new SparkUncaughtExceptionHandler(
       exitOnUncaughtException = false))
+    // 日志相关的处理
     Utils.initDaemon(log)
+    // sparkConf的创建,此sparkConf中会保存各种环境变量的值
     val conf = new SparkConf
+    // 参数的解析 及 包装
     val args = new WorkerArguments(argStrings, conf)
+    // 启动操作
     val rpcEnv = startRpcEnvAndEndpoint(args.host, args.port, args.webUiPort, args.cores,
       args.memory, args.masters, args.workDir, conf = conf)
     // With external shuffle service enabled, if we request to launch multiple workers on one host,
@@ -789,6 +842,7 @@ private[deploy] object Worker extends Logging {
       "Starting multiple workers on one host is failed because we may launch no more than one " +
         "external shuffle service on each host, please set spark.shuffle.service.enabled to " +
         "false or set SPARK_WORKER_INSTANCES to 1 to resolve the conflict.")
+    // 等待防止退出
     rpcEnv.awaitTermination()
   }
 
@@ -804,10 +858,14 @@ private[deploy] object Worker extends Logging {
       conf: SparkConf = new SparkConf): RpcEnv = {
 
     // The LocalSparkCluster runs multiple local sparkWorkerX RPC Environments
+    // 如果启动多个 worker 实例, name尾缀 会添加一个 数字以示区别
     val systemName = SYSTEM_NAME + workerNumber.map(_.toString).getOrElse("")
     val securityMgr = new SecurityManager(conf)
+    // RpcEnv的创建
     val rpcEnv = RpcEnv.create(systemName, host, port, conf, securityMgr)
+    // master的地址
     val masterAddresses = masterUrls.map(RpcAddress.fromSparkURL(_))
+    // worker的初始化,以及 workerEndpoint的注册
     rpcEnv.setupEndpoint(ENDPOINT_NAME, new Worker(rpcEnv, webUiPort, cores, memory,
       masterAddresses, ENDPOINT_NAME, workDir, conf, securityMgr))
     rpcEnv

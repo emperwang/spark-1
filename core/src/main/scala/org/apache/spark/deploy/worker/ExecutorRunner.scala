@@ -56,6 +56,7 @@ private[deploy] class ExecutorRunner(
   extends Logging {
 
   private val fullId = appId + "/" + execId
+  // 工作线程
   private var workerThread: Thread = null
   private var process: Process = null
   private var stdoutAppender: FileAppender = null
@@ -67,13 +68,15 @@ private[deploy] class ExecutorRunner(
   // NOTE: This is now redundant with the automated shut-down enforced by the Executor. It might
   // make sense to remove this in the future.
   private var shutdownHook: AnyRef = null
-
+  // executor的启动
   private[worker] def start() {
+    // 启动一个线程来启动 executor
     workerThread = new Thread("ExecutorRunner for " + fullId) {
       override def run() { fetchAndRunExecutor() }
     }
     workerThread.start()
     // Shutdown hook that kills actors on shutdown.
+    // 关闭的回调函数
     shutdownHook = ShutdownHookManager.addShutdownHook { () =>
       // It's possible that we arrive here before calling `fetchAndRunExecutor`, then `state` will
       // be `ExecutorState.RUNNING`. In this case, we should set `state` to `FAILED`.
@@ -105,6 +108,7 @@ private[deploy] class ExecutorRunner(
       }
     }
     try {
+      //
       worker.send(ExecutorStateChanged(appId, execId, state, message, exitCode))
     } catch {
       case e: IllegalStateException => logWarning(e.getMessage(), e)
@@ -138,6 +142,7 @@ private[deploy] class ExecutorRunner(
 
   /**
    * Download and run the executor described in our ApplicationDescription
+   * 下载并使用 executor运行在 ApplicationDescription中描述的任务
    */
   private def fetchAndRunExecutor() {
     try {
@@ -146,6 +151,7 @@ private[deploy] class ExecutorRunner(
         Utils.substituteAppNExecIds(_, appId, execId.toString)
       }
       val subsCommand = appDesc.command.copy(javaOpts = subsOpts)
+      // 创建 进程 启动的命令
       val builder = CommandUtils.buildProcessBuilder(subsCommand, new SecurityManager(conf),
         memory, sparkHome.getAbsolutePath, substituteVariables)
       val command = builder.command()
@@ -167,15 +173,17 @@ private[deploy] class ExecutorRunner(
         }
       builder.environment.put("SPARK_LOG_URL_STDERR", s"${baseUrl}stderr")
       builder.environment.put("SPARK_LOG_URL_STDOUT", s"${baseUrl}stdout")
-
+      // 进程启动
       process = builder.start()
       val header = "Spark Executor Command: %s\n%s\n\n".format(
         formattedCommand, "=" * 40)
 
       // Redirect its stdout and stderr to files
+      // 标准输出
       val stdout = new File(executorDir, "stdout")
+      // 进程的输出 重定向到 stdout
       stdoutAppender = FileAppender(process.getInputStream, stdout, conf)
-
+      // 标准错误输出
       val stderr = new File(executorDir, "stderr")
       Files.write(header, stderr, StandardCharsets.UTF_8)
       stderrAppender = FileAppender(process.getErrorStream, stderr, conf)

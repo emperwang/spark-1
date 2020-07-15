@@ -78,6 +78,7 @@ private[deploy] class DriverRunner(
   }
 
   /** Starts a thread to run and manage the driver. */
+    // driver的启动
   private[worker] def start() = {
     new Thread("DriverRunner for " + driverId) {
       override def run() {
@@ -89,6 +90,7 @@ private[deploy] class DriverRunner(
           }
 
           // prepare driver jars and run driver
+          // 运行 driver
           val exitCode = prepareAndRunDriver()
 
           // set final state depending on if forcibly killed and process exit code
@@ -179,14 +181,17 @@ private[deploy] class DriverRunner(
     }
 
     // TODO: If we add ability to submit multiple jars they should also be added here
+    // todo buildProcessBuilder 使用java.lang.ProcessBuilder 来构建启动操作系统进程的命令
     val builder = CommandUtils.buildProcessBuilder(driverDesc.command, securityManager,
       driverDesc.mem, sparkHome.getAbsolutePath, substituteVariables)
-
+    // 运行 driver
+    // 运行上面 创建的进程的命令
     runDriver(builder, driverDir, driverDesc.supervise)
   }
-
+  // 启动driver
   private def runDriver(builder: ProcessBuilder, baseDir: File, supervise: Boolean): Int = {
     builder.directory(baseDir)
+    // 初始化函数
     def initialize(process: Process): Unit = {
       // Redirect stdout and stderr to files
       val stdout = new File(baseDir, "stdout")
@@ -215,7 +220,9 @@ private[deploy] class DriverRunner(
 
       synchronized {
         if (killed) { return exitCode }
+        // driver的启动  command.start()
         process = Some(command.start())
+        // driver的初始化
         initialize(process.get)
       }
 

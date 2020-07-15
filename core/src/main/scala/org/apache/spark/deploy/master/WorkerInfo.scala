@@ -31,7 +31,7 @@ private[spark] class WorkerInfo(
     val endpoint: RpcEndpointRef,
     val webUiAddress: String)
   extends Serializable {
-
+  // host检测
   Utils.checkHost(host)
   assert (port > 0)
 
@@ -42,9 +42,9 @@ private[spark] class WorkerInfo(
   @transient var memoryUsed: Int = _
 
   @transient var lastHeartbeat: Long = _
-
+  // 初始化
   init()
-
+  // 可用的核数  和 内存
   def coresFree: Int = cores - coresUsed
   def memoryFree: Int = memory - memoryUsed
 
@@ -52,7 +52,7 @@ private[spark] class WorkerInfo(
     in.defaultReadObject()
     init()
   }
-
+  // 此初始化 是创建保存信息的容器
   private def init() {
     executors = new mutable.HashMap
     drivers = new mutable.HashMap
