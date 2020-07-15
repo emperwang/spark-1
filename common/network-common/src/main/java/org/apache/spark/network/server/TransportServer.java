@@ -67,6 +67,7 @@ public class TransportServer implements Closeable {
       List<TransportServerBootstrap> bootstraps) {
     this.context = context;
     this.conf = context.getConf();
+    // 记录了 rpc的处理器
     this.appRpcHandler = appRpcHandler;
     this.bootstraps = Lists.newArrayList(Preconditions.checkNotNull(bootstraps));
 

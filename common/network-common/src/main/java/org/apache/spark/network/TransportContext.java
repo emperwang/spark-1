@@ -144,7 +144,10 @@ public class TransportContext {
       SocketChannel channel,
       RpcHandler channelRpcHandler) {
     try {
+      // 重点
+      // 这里吧自定义的 RpcHandler 包装为了 TransportChannelHandler,这样就可以注册进 netty中使用了
       TransportChannelHandler channelHandler = createChannelHandler(channel, channelRpcHandler);
+      // 真正向netty 注册自定义处理器的动作
       channel.pipeline()
         .addLast("encoder", ENCODER)
         .addLast(TransportFrameDecoder.HANDLER_NAME, NettyUtils.createFrameDecoder())
@@ -165,11 +168,16 @@ public class TransportContext {
    * ResponseMessages. The channel is expected to have been successfully created, though certain
    * properties (such as the remoteAddress()) may not be available yet.
    */
+  // 创建自定义处理器
   private TransportChannelHandler createChannelHandler(Channel channel, RpcHandler rpcHandler) {
+    // 发出消息的处理
     TransportResponseHandler responseHandler = new TransportResponseHandler(channel);
+    // 对外发送消息的包装
     TransportClient client = new TransportClient(channel, responseHandler);
+    // 接收消息的处理
     TransportRequestHandler requestHandler = new TransportRequestHandler(channel, client,
       rpcHandler, conf.maxChunksBeingTransferred());
+    // 消息的处理
     return new TransportChannelHandler(client, responseHandler, requestHandler,
       conf.connectionTimeoutMs(), closeIdleConnections);
   }
