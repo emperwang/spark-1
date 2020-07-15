@@ -27,10 +27,12 @@
 #   SPARK_SLAVE_SLEEP Seconds to sleep between spawning remote commands.
 #   SPARK_SSH_OPTS Options passed to ssh when running remote commands.
 ##
-
+# 传递的参数
+#slaves.sh" cd "${SPARK_HOME}" \; "${SPARK_HOME}/sbin/start-slave.sh" "spark://$SPARK_MASTER_HOST:$SPARK_MASTER_PORT"
 usage="Usage: slaves.sh [--config <conf-dir>] command..."
 
 # if no args specified, show usage
+# 没有传递参数,则 打印帮助信息
 if [ $# -le 0 ]; then
   echo $usage
   exit 1
@@ -51,6 +53,7 @@ fi
 
 # Check if --config is passed as an argument. It is an optional parameter.
 # Exit if the argument is not a directory.
+# 配置目录的指定
 if [ "$1" == "--config" ]
 then
   shift
@@ -65,9 +68,9 @@ then
   fi
   shift
 fi
-
+# 运行环境的配置
 . "${SPARK_HOME}/bin/load-spark-env.sh"
-
+# 要启动slave的host
 if [ "$HOSTLIST" = "" ]; then
   if [ "$SPARK_SLAVES" = "" ]; then
     if [ -f "${SPARK_CONF_DIR}/slaves" ]; then
@@ -83,10 +86,11 @@ fi
 
 
 # By default disable strict host key checking
+## ssh的参数
 if [ "$SPARK_SSH_OPTS" = "" ]; then
   SPARK_SSH_OPTS="-o StrictHostKeyChecking=no"
 fi
-
+## 遍历所有的slave 通过ssh 来执行启动操作
 for slave in `echo "$HOSTLIST"|sed  "s/#.*$//;/^$/d"`; do
   if [ -n "${SPARK_SSH_FOREGROUND}" ]; then
     ssh $SPARK_SSH_OPTS "$slave" $"${@// /\\ }" \

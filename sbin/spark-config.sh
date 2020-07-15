@@ -24,9 +24,10 @@
 if [ -z "${SPARK_HOME}" ]; then
   export SPARK_HOME="$(cd "`dirname "$0"`"/..; pwd)"
 fi
-
+# 配置文件的目录
 export SPARK_CONF_DIR="${SPARK_CONF_DIR:-"${SPARK_HOME}/conf"}"
 # Add the PySpark classes to the PYTHONPATH:
+# python home的设置
 if [ -z "${PYSPARK_PYTHONPATH_SET}" ]; then
   export PYTHONPATH="${SPARK_HOME}/python:${PYTHONPATH}"
   export PYTHONPATH="${SPARK_HOME}/python/lib/py4j-0.10.7-src.zip:${PYTHONPATH}"

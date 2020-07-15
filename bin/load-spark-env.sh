@@ -35,6 +35,7 @@ if [ -z "$SPARK_ENV_LOADED" ]; then
   if [ -f "${SPARK_CONF_DIR}/spark-env.sh" ]; then
     # Promote all variable declarations to environment (exported) variables
     # 设置环境变量
+    # 执行配置文件中 spark-env.sh 来进行环境的配置
     set -a
     . "${SPARK_CONF_DIR}/spark-env.sh"
     set +a
@@ -42,7 +43,7 @@ if [ -z "$SPARK_ENV_LOADED" ]; then
 fi
 
 # Setting SPARK_SCALA_VERSION if not already set.
-
+# scala的版本号判断
 if [ -z "$SPARK_SCALA_VERSION" ]; then
 
   ASSEMBLY_DIR2="${SPARK_HOME}/assembly/target/scala-2.11"

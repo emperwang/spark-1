@@ -105,7 +105,7 @@ if [ "$SPARK_IDENT_STRING" = "" ]; then
   export SPARK_IDENT_STRING="$USER"
 fi
 
-
+# 此表示打印 build好的命令
 export SPARK_PRINT_LAUNCH_COMMAND="1"
 
 # get log directory
@@ -202,20 +202,20 @@ run_command() {
   echo "starting $command, logging to $log"
   # 根据模式  执行不同的操作
   case "$mode" in
-    (class)
+    (class) # 一般启动 master slave 都会到此
+    #  运行class 由 spark-class 来执行
       execute_command nice -n "$SPARK_NICENESS" "${SPARK_HOME}"/bin/spark-class "$command" "$@"
       ;;
 
-    (submit)
+    (submit)  # 提交任务 会执行此
+    # 提交任务由  spark-submit 来执行
       execute_command nice -n "$SPARK_NICENESS" bash "${SPARK_HOME}"/bin/spark-submit --class "$command" "$@"
       ;;
-
-    (*)
+    (*) # 启动模式 只能是上面两种
       echo "unknown mode: $mode"
       exit 1
       ;;
   esac
-
 }
 
 case $option in
