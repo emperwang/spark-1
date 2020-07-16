@@ -1017,6 +1017,8 @@ private[spark] class DAGScheduler(
     val stageInfos = stageIds.flatMap(id => stageIdToStage.get(id).map(_.latestInfo))
     listenerBus.post(
       SparkListenerJobStart(job.jobId, jobSubmissionTime, stageInfos, properties))
+
+    // 重点
     submitStage(finalStage)
   }
 
@@ -1075,9 +1077,11 @@ private[spark] class DAGScheduler(
         logDebug("missing: " + missing)
         if (missing.isEmpty) {
           logInfo("Submitting " + stage + " (" + stage.rdd + "), which has no missing parents")
+          // 重点
           submitMissingTasks(stage, jobId.get)
         } else {
           for (parent <- missing) {
+            // 如果有缺失的parent 则再次提交parent任务
             submitStage(parent)
           }
           waitingStages += stage
@@ -1220,6 +1224,7 @@ private[spark] class DAGScheduler(
       logInfo(s"Submitting ${tasks.size} missing tasks from $stage (${stage.rdd}) (first 15 " +
         s"tasks are for partitions ${tasks.take(15).map(_.partitionId)})")
       // tasks的提交
+      // 重点 .....
       taskScheduler.submitTasks(new TaskSet(
         tasks.toArray, stage.id, stage.latestInfo.attemptNumber, jobId, properties))
     } else {

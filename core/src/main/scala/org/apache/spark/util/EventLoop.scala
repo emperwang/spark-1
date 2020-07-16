@@ -49,7 +49,8 @@ private[spark] abstract class EventLoop[E](name: String) extends Logging {
           // 获取消息
           val event = eventQueue.take()
           try {
-            // 处理消息
+            // 具体消息处理方法
+            // 此处理在子类中实现 org.apache.spark.scheduler.DAGSchedulerEventProcessLoop
             onReceive(event)
           } catch {
             case NonFatal(e) =>

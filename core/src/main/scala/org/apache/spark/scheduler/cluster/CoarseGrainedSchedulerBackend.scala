@@ -250,6 +250,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         scheduler.resourceOffers(workOffers)
       }
       // 如果存在任务,则启动 task执行任务
+      // 让 executor 启动task
       if (!taskDescs.isEmpty) {
         launchTasks(taskDescs)
       }
@@ -447,7 +448,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       removeExecutor(eid, SlaveLost("Stale executor after cluster manager re-registered."))
     }
   }
-  // 向driver 发送消息
+  // 向CoarseGrainedSchedulerBackend 内部类 DriverEndpoint发送消息
   override def reviveOffers() {
     driverEndpoint.send(ReviveOffers)
   }

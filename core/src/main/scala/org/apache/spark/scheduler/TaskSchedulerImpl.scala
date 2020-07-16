@@ -200,7 +200,7 @@ private[spark] class TaskSchedulerImpl(
   override def postStartHook() {
     waitBackendReady()
   }
-
+  // 提交任务
   override def submitTasks(taskSet: TaskSet) {
     val tasks = taskSet.tasks
     logInfo("Adding task set " + taskSet.id + " with " + tasks.length + " tasks")
@@ -240,6 +240,8 @@ private[spark] class TaskSchedulerImpl(
       }
       hasReceivedTask = true
     }
+    // 重点 ...
+    // 分发task 到各个 executor
     backend.reviveOffers()
   }
 
