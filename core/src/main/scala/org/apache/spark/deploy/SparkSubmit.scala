@@ -822,6 +822,7 @@ private[spark] class SparkSubmit extends Logging {
 
     try {
       // 加载 要运行的类
+      // 这里是 org.apache.spark.deploy.SparkSubmit
       mainClass = Utils.classForName(childMainClass)
     } catch {
       case e: ClassNotFoundException =>
@@ -862,6 +863,8 @@ private[spark] class SparkSubmit extends Logging {
 
     try {
       // application启动
+      // 如果是 client,此时就是直接启动 目标任务
+      // 如果是 cluster, 此时app为 org.apache.spark.deploy.ClientApp
       app.start(childArgs.toArray, sparkConf)
     } catch {
       case t: Throwable =>

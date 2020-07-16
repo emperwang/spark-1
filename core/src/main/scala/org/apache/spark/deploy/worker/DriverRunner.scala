@@ -91,6 +91,7 @@ private[deploy] class DriverRunner(
 
           // prepare driver jars and run driver
           // 运行 driver
+          // 重点
           val exitCode = prepareAndRunDriver()
 
           // set final state depending on if forcibly killed and process exit code
@@ -154,6 +155,7 @@ private[deploy] class DriverRunner(
     val localJarFile = new File(driverDir, jarFileName)
     if (!localJarFile.exists()) { // May already exist if running multiple workers on one node
       logInfo(s"Copying user jar ${driverDesc.jarUrl} to $localJarFile")
+      // 下载用户的jar包
       Utils.fetchFile(
         driverDesc.jarUrl,
         driverDir,
@@ -171,7 +173,9 @@ private[deploy] class DriverRunner(
   }
 
   private[worker] def prepareAndRunDriver(): Int = {
+    // 常见driver的工作目录
     val driverDir = createWorkingDirectory()
+    // 下载 jar包到本地
     val localJarFilename = downloadUserJar(driverDir)
 
     def substituteVariables(argument: String): String = argument match {
@@ -192,6 +196,7 @@ private[deploy] class DriverRunner(
   private def runDriver(builder: ProcessBuilder, baseDir: File, supervise: Boolean): Int = {
     builder.directory(baseDir)
     // 初始化函数
+    // 此处主要是对 启动的进程的 标准输出 标准错误输出 进行重定向
     def initialize(process: Process): Unit = {
       // Redirect stdout and stderr to files
       val stdout = new File(baseDir, "stdout")

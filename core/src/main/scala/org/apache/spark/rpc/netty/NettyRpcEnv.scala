@@ -120,6 +120,7 @@ private[netty] class NettyRpcEnv(
         java.util.Collections.emptyList()
       }
     // rpc的server,也是 master绑定的地址
+    // rpc的driver   worker 都是这里
     server = transportContext.createServer(bindAddress, port, bootstraps)
     // 注册一个 RpcEndpointVerifier 的endpoint
     dispatcher.registerRpcEndpoint(

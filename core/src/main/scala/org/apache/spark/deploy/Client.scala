@@ -236,13 +236,13 @@ private[spark] class ClientApp extends SparkApplication {
       conf.set("spark.rpc.askTimeout", "10s")
     }
     Logger.getRootLogger.setLevel(driverArgs.logLevel)
-
+    // 熟悉的感觉,和master worker一样,创建 RPcRnv环境
     val rpcEnv =
       RpcEnv.create("driverClient", Utils.localHostName(), 0, conf, new SecurityManager(conf))
-
     val masterEndpoints = driverArgs.masters.map(RpcAddress.fromSparkURL).
       map(rpcEnv.setupEndpointRef(_, Master.ENDPOINT_NAME))
     // new ClientEndpoint 中 driver 的启动
+    // 重点 ClientEndpoint
     rpcEnv.setupEndpoint("client", new ClientEndpoint(rpcEnv, driverArgs, masterEndpoints, conf))
 
     rpcEnv.awaitTermination()
