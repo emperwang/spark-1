@@ -65,6 +65,7 @@ private class ClientEndpoint(
   }
 
   override def onStart(): Unit = {
+    // 启动driver
     driverArgs.cmd match {
       case "launch" =>
         // TODO: We could add an env variable here and intercept it in `sc.addJar` that would
@@ -91,7 +92,7 @@ private class ClientEndpoint(
         val command = new Command(mainClass,
           Seq("{{WORKER_URL}}", "{{USER_JAR}}", driverArgs.mainClass) ++ driverArgs.driverOptions,
           sys.env, classPathEntries, libraryPathEntries, javaOpts)
-
+        // driver 的描述
         val driverDescription = new DriverDescription(
           driverArgs.jarUrl,
           driverArgs.memory,
@@ -100,7 +101,7 @@ private class ClientEndpoint(
           command)
         asyncSendToMasterAndForwardReply[SubmitDriverResponse](
           RequestSubmitDriver(driverDescription))
-
+      // 停止 driver
       case "kill" =>
         val driverId = driverArgs.driverId
         asyncSendToMasterAndForwardReply[KillDriverResponse](RequestKillDriver(driverId))
@@ -225,7 +226,7 @@ object Client {
     new ClientApp().start(args, new SparkConf())
   }
 }
-
+// client模式提交 任务
 private[spark] class ClientApp extends SparkApplication {
 
   override def start(args: Array[String], conf: SparkConf): Unit = {
@@ -241,6 +242,7 @@ private[spark] class ClientApp extends SparkApplication {
 
     val masterEndpoints = driverArgs.masters.map(RpcAddress.fromSparkURL).
       map(rpcEnv.setupEndpointRef(_, Master.ENDPOINT_NAME))
+    // new ClientEndpoint 中 driver 的启动
     rpcEnv.setupEndpoint("client", new ClientEndpoint(rpcEnv, driverArgs, masterEndpoints, conf))
 
     rpcEnv.awaitTermination()

@@ -561,7 +561,9 @@ private[spark] object Utils extends Logging {
     logInfo(s"Fetching $url to $tempFile")
 
     try {
+      // 本地的临时文件
       val out = new FileOutputStream(tempFile)
+      // 拷贝操作
       Utils.copyStream(in, out, closeStreams = true)
       copyFile(url, tempFile, destFile, fileOverwrite, removeSourceFile = true)
     } finally {
@@ -690,8 +692,12 @@ private[spark] object Utils extends Logging {
           throw new IllegalStateException(
             "Cannot retrieve files with 'spark' scheme without an active SparkEnv.")
         }
+        // 开启一个channel
         val source = SparkEnv.get.rpcEnv.openChannel(url)
+        // 创建channel
         val is = Channels.newInputStream(source)
+        // 下载文件的动作
+        // 就是把远程文件通过 channel,也就是socket 读取到本地
         downloadFile(url, is, targetFile, fileOverwrite)
       case "http" | "https" | "ftp" =>
         var uc: URLConnection = null
@@ -716,6 +722,7 @@ private[spark] object Utils extends Logging {
         // In the case of a local file, copy the local file to the target directory.
         // Note the difference between uri vs url.
         val sourceFile = if (uri.isAbsolute) new File(uri) else new File(url)
+        // 如果是本地,则直接进行拷贝
         copyFile(url, sourceFile, targetFile, fileOverwrite)
       case _ =>
         val fs = getHadoopFileSystem(uri, hadoopConf)

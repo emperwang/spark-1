@@ -181,7 +181,7 @@ private[deploy] class DriverRunner(
     }
 
     // TODO: If we add ability to submit multiple jars they should also be added here
-    // todo buildProcessBuilder 使用java.lang.ProcessBuilder 来构建启动操作系统进程的命令
+    // 重点 buildProcessBuilder 使用java.lang.ProcessBuilder 来构建启动操作系统进程的命令
     val builder = CommandUtils.buildProcessBuilder(driverDesc.command, securityManager,
       driverDesc.mem, sparkHome.getAbsolutePath, substituteVariables)
     // 运行 driver
@@ -221,6 +221,8 @@ private[deploy] class DriverRunner(
       synchronized {
         if (killed) { return exitCode }
         // driver的启动  command.start()
+        // 重点  driver的启动
+        // drive的启动类 org.apache.spark.deploy.worker.DriverWrapper
         process = Some(command.start())
         // driver的初始化
         initialize(process.get)

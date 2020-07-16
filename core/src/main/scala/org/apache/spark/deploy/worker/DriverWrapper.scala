@@ -31,6 +31,7 @@ import org.apache.spark.util._
  * Utility object for launching driver programs such that they share fate with the Worker process.
  * This is used in standalone cluster mode only.
  */
+// driver的启动类 入口
 object DriverWrapper extends Logging {
   def main(args: Array[String]) {
     args.toList match {
@@ -40,12 +41,16 @@ object DriverWrapper extends Logging {
        * uses this class to launch the driver, the ordering and semantics of the arguments
        * here must also remain consistent across versions.
        */
+        // workerUrl 要WorkerWatcher 监视的 worker
       case workerUrl :: userJar :: mainClass :: extraArgs =>
         val conf = new SparkConf()
         val host: String = Utils.localHostName()
         val port: Int = sys.props.getOrElse("spark.driver.port", "0").toInt
+        // 熟悉不?  到这里创建  RpcEnv
+        // 嗯,就是消息的分发, 以及 和netty的联系
         val rpcEnv = RpcEnv.create("Driver", host, port, conf, new SecurityManager(conf))
         logInfo(s"Driver address: ${rpcEnv.address}")
+        // 这里创建 WorkerWatcher
         rpcEnv.setupEndpoint("workerWatcher", new WorkerWatcher(rpcEnv, workerUrl))
 
         val currentLoader = Thread.currentThread.getContextClassLoader
@@ -60,8 +65,13 @@ object DriverWrapper extends Logging {
         setupDependencies(loader, userJar)
 
         // Delegate to supplied main class
+        // 这里才是 用于声明的 任务类
+        // 也就是在 加载 用户定义的任务类
         val clazz = Utils.classForName(mainClass)
+        // 获取人物类的入口函数  main
         val mainMethod = clazz.getMethod("main", classOf[Array[String]])
+        // 调用main  方法
+        // 也就是在这里 开始执行 用户任务
         mainMethod.invoke(null, extraArgs.toArray[String])
 
         rpcEnv.shutdown()

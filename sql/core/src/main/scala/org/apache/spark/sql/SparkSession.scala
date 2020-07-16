@@ -779,7 +779,7 @@ object SparkSession extends Logging {
     private[this] val options = new scala.collection.mutable.HashMap[String, String]
 
     private[this] val extensions = new SparkSessionExtensions
-
+    // 用户提供了 sparkContext
     private[this] var userSuppliedContext: Option[SparkContext] = None
 
     private[spark] def sparkContext(sparkContext: SparkContext): Builder = synchronized {
@@ -926,7 +926,7 @@ object SparkSession extends Logging {
           if (!sparkConf.contains("spark.app.name")) {
             sparkConf.setAppName(java.util.UUID.randomUUID().toString)
           }
-
+          // 创建 sparkContext
           SparkContext.getOrCreate(sparkConf)
           // Do not update `SparkConf` for existing `SparkContext`, as it's shared by all sessions.
         }
@@ -948,7 +948,7 @@ object SparkSession extends Logging {
               logWarning(s"Cannot use $extensionConfClassName to configure session extensions.", e)
           }
         }
-
+        // 创建sparkSession
         session = new SparkSession(sparkContext, None, None, extensions)
         options.foreach { case (k, v) => session.initialSessionOptions.put(k, v) }
         setDefaultSession(session)

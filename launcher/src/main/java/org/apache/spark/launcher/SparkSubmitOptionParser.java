@@ -136,6 +136,7 @@ class SparkSubmitOptionParser {
    * @throws IllegalArgumentException If an error is found during parsing.
    */
   protected final void parse(List<String> args) {
+    // 使用正则 来对参数进行匹配
     Pattern eqSeparatedOpt = Pattern.compile("(--[^=]+)=(.+)");
 
     int idx = 0;
@@ -160,6 +161,7 @@ class SparkSubmitOptionParser {
           idx++;
           value = args.get(idx);
         }
+        // 对参数进行处理 使用 match case
         if (!handle(name, value)) {
           break;
         }
@@ -174,7 +176,7 @@ class SparkSubmitOptionParser {
         }
         continue;
       }
-
+      //  对没有匹配到的 参数的处理
       if (!handleUnknown(arg)) {
         break;
       }
@@ -183,6 +185,7 @@ class SparkSubmitOptionParser {
     if (idx < args.size()) {
       idx++;
     }
+    // 处理额外的参数, 额外的参数 大多是要启动任务的参数
     handleExtraArgs(args.subList(idx, args.size()));
   }
 

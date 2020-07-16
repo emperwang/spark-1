@@ -106,17 +106,21 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   }
 
   // Set parameters from command line arguments
+  // 解析命令行传递的参数
   parse(args.asJava)
 
   // Populate `sparkProperties` map from properties file
+  // 加载 使用--conf指定的配置文件, 或者加载配置目录中 spark-default.conf
   mergeDefaultSparkProperties()
   // Remove keys that don't start with "spark." from `sparkProperties`.
+  // 去除那些 不是以 spark.开头的配置
   ignoreNonSparkProperties()
   // Use `sparkProperties` map along with env vars to fill in any missing parameters
+  // 加载 env中的配置
   loadEnvironmentArguments()
 
   useRest = sparkProperties.getOrElse("spark.master.rest.enabled", "false").toBoolean
-
+  // 参数校验
   validateArguments()
 
   /**
@@ -125,8 +129,10 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
    */
   private def mergeDefaultSparkProperties(): Unit = {
     // Use common defaults file, if not specified by user
+    // 获取  spark-default.conf的默认值
     propertiesFile = Option(propertiesFile).getOrElse(Utils.getDefaultPropertiesFile(env))
     // Honor --conf before the defaults file
+    // 把 --conf的值加载到  defaultSparkProperties
     defaultSparkProperties.foreach { case (k, v) =>
       if (!sparkProperties.contains(k)) {
         sparkProperties(k) = v
@@ -242,10 +248,12 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
     }
 
     // Action should be SUBMIT unless otherwise specified
+    // 没有设置的话  默认 action是 SUBMIT
     action = Option(action).getOrElse(SUBMIT)
   }
 
   /** Ensure that required fields exists. Call this only once all defaults are loaded. */
+    // 参数的校验
   private def validateArguments(): Unit = {
     action match {
       case SUBMIT => validateSubmitArguments()
@@ -254,8 +262,9 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
       case PRINT_VERSION =>
     }
   }
-
+  // 参数的校验
   private def validateSubmitArguments(): Unit = {
+    // 没有传递参数,则打印帮助信息
     if (args.length == 0) {
       printUsageAndExit(-1)
     }
@@ -356,6 +365,7 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
   }
 
   /** Fill in values by parsing user options. */
+    // 把 命令行传递的参数记录起来
   override protected def handle(opt: String, value: String): Boolean = {
     opt match {
       case NAME =>

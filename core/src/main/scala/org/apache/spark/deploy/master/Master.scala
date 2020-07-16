@@ -463,6 +463,7 @@ private[deploy] class Master(
   }
 
   override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
+        // client向master 发送的 提交drive的消息
     case RequestSubmitDriver(description) =>
       if (state != RecoveryState.ALIVE) {
         val msg = s"${Utils.BACKUP_STANDALONE_MASTER_PREFIX}: $state. " +
@@ -470,15 +471,20 @@ private[deploy] class Master(
         context.reply(SubmitDriverResponse(self, false, None, msg))
       } else {
         logInfo("Driver submitted " + description.command.mainClass)
+        // 创建driver
         val driver = createDriver(description)
+        // 持久化引擎 添加  driver
         persistenceEngine.addDriver(driver)
+        // 此driver只是创建好了,并没有启动运行,所以先记录到 waitingDrivers
         waitingDrivers += driver
+        // 并把此driver 记录到 drivers
         drivers.add(driver)
+        // 调度; 也就是在 worker中查找合适的worker 来启动driver
         schedule()
 
         // TODO: It might be good to instead have the submission client poll the master to determine
         //       the current status of the driver. For now it's simply "fire and forget".
-
+        // 回复消息
         context.reply(SubmitDriverResponse(self, true, Some(driver.id),
           s"Driver successfully submitted as ${driver.id}"))
       }
@@ -1084,6 +1090,7 @@ private[deploy] class Master(
   }
 
   private def newDriverId(submitDate: Date): String = {
+    // 此处可以看到 driver名字生成策略
     val appId = "driver-%s-%04d".format(createDateFormat.format(submitDate), nextDriverNumber)
     nextDriverNumber += 1
     appId
@@ -1098,8 +1105,10 @@ private[deploy] class Master(
   private def launchDriver(worker: WorkerInfo, driver: DriverInfo) {
     logInfo("Launching driver " + driver.id + " on worker " + worker.id)
     worker.addDriver(driver)
+    // 记录此driver 要在哪里运行
     driver.worker = Some(worker)
     // 发送LaunchDriver 消息到 worker
+    // 向要运行driver的 worker发送消息
     worker.endpoint.send(LaunchDriver(driver.id, driver.desc))
     driver.state = DriverState.RUNNING
   }
