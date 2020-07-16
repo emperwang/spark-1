@@ -169,6 +169,7 @@ private[spark] class Executor(
   private val maxResultSize = conf.get(MAX_RESULT_SIZE)
 
   // Maintains the list of running tasks.
+  // 记录正在运行的task
   private val runningTasks = new ConcurrentHashMap[Long, TaskRunner]
 
   /**
@@ -201,8 +202,11 @@ private[spark] class Executor(
   private[executor] def numRunningTasks: Int = runningTasks.size()
 
   def launchTask(context: ExecutorBackend, taskDescription: TaskDescription): Unit = {
+    //  使用TaskRunner 包装一下 发送过来的任务
     val tr = new TaskRunner(context, taskDescription)
+    // 记录此即将要运行的task
     runningTasks.put(taskDescription.taskId, tr)
+    // 执行任务
     threadPool.execute(tr)
   }
 
@@ -399,11 +403,13 @@ private[spark] class Executor(
         }
 
         // Run the actual task and measure its runtime.
+        // 记录任务开始时间
         taskStartTime = System.currentTimeMillis()
         taskStartCpu = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
           threadMXBean.getCurrentThreadCpuTime
         } else 0L
         var threwException = true
+        // 任务的执行  todo  --- 任务开始执行
         val value = Utils.tryWithSafeFinally {
           val res = task.run(
             taskAttemptId = taskId,

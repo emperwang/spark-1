@@ -131,7 +131,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
                 s"from unknown executor with ID $executorId")
           }
         }
-
+      // 发送task到worker执行
       case ReviveOffers =>
         makeOffers()
 
@@ -239,14 +239,17 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       // Make sure no executor is killed while some task is launching on it
       val taskDescs = withLock {
         // Filter out executors under killing
+        // 过滤出 active executor
         val activeExecutors = executorDataMap.filterKeys(executorIsAlive)
         val workOffers = activeExecutors.map {
           case (id, executorData) =>
             new WorkerOffer(id, executorData.executorHost, executorData.freeCores,
               Some(executorData.executorAddress.hostPort))
         }.toIndexedSeq
+        // 重点 --
         scheduler.resourceOffers(workOffers)
       }
+      // 如果存在任务,则启动 task执行任务
       if (!taskDescs.isEmpty) {
         launchTasks(taskDescs)
       }
@@ -308,7 +311,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
           logDebug(s"Launching task ${task.taskId} on executor id: ${task.executorId} hostname: " +
             s"${executorData.executorHost}.")
-
+          // 发送 LaunchTask 的消息到executor,让executor来执行任务
           executorData.executorEndpoint.send(LaunchTask(new SerializableBuffer(serializedTask)))
         }
       }
@@ -444,7 +447,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       removeExecutor(eid, SlaveLost("Stale executor after cluster manager re-registered."))
     }
   }
-
+  // 向driver 发送消息
   override def reviveOffers() {
     driverEndpoint.send(ReviveOffers)
   }

@@ -1077,6 +1077,7 @@ abstract class RDD[T: ClassTag](
         }
       }
     }
+    // 提交任务
     sc.runJob(this, reducePartition, mergeResult)
     // Get the final result out of our Option, or throw an exception if the RDD was empty
     jobResult.getOrElse(throw new UnsupportedOperationException("empty collection"))
