@@ -924,10 +924,13 @@ object SparkSession extends Logging {
 
         // No active nor global default session. Create a new one.
         val sparkContext = userSuppliedContext.getOrElse {
+          // 创建 sparkConf
           val sparkConf = new SparkConf()
+          // 把options中的配置 设置到 sparkConf中
           options.foreach { case (k, v) => sparkConf.set(k, v) }
 
           // set a random app name if not given.
+          // 如果没有设置 app.name,则设置一个随机的name
           if (!sparkConf.contains("spark.app.name")) {
             sparkConf.setAppName(java.util.UUID.randomUUID().toString)
           }
@@ -956,7 +959,9 @@ object SparkSession extends Logging {
         // 创建sparkSession
         session = new SparkSession(sparkContext, None, None, extensions)
         options.foreach { case (k, v) => session.initialSessionOptions.put(k, v) }
+        // 保存创建的 sparkSession
         setDefaultSession(session)
+        // sparkSession放入到 threadLocal中
         setActiveSession(session)
 
         // Register a successfully instantiated context to the singleton. This should be at the
@@ -1004,6 +1009,7 @@ object SparkSession extends Logging {
    * @since 2.0.0
    */
   def setActiveSession(session: SparkSession): Unit = {
+    // 把创建的sparkSession 放入到 threadLocal中
     activeThreadSession.set(session)
   }
 
@@ -1023,6 +1029,7 @@ object SparkSession extends Logging {
    * @since 2.0.0
    */
   def setDefaultSession(session: SparkSession): Unit = {
+    // 把sparkSession 保存到 defaultSession
     defaultSession.set(session)
   }
 
