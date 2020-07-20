@@ -772,6 +772,7 @@ object SparkSession extends Logging {
 
   /**
    * Builder for [[SparkSession]].
+   * 构建的sparkSession的工厂类
    */
   @InterfaceStability.Stable
   class Builder extends Logging {
@@ -781,7 +782,7 @@ object SparkSession extends Logging {
     private[this] val extensions = new SparkSessionExtensions
     // 用户提供了 sparkContext
     private[this] var userSuppliedContext: Option[SparkContext] = None
-
+    // sparkContext
     private[spark] def sparkContext(sparkContext: SparkContext): Builder = synchronized {
       userSuppliedContext = Option(sparkContext)
       this
@@ -790,7 +791,7 @@ object SparkSession extends Logging {
     /**
      * Sets a name for the application, which will be shown in the Spark web UI.
      * If no application name is set, a randomly generated name will be used.
-     *
+     * 配置 app name
      * @since 2.0.0
      */
     def appName(name: String): Builder = config("spark.app.name", name)
@@ -798,10 +799,11 @@ object SparkSession extends Logging {
     /**
      * Sets a config option. Options set using this method are automatically propagated to
      * both `SparkConf` and SparkSession's own configuration.
-     *
+     * 添加option
      * @since 2.0.0
      */
     def config(key: String, value: String): Builder = synchronized {
+      // 可以看到此处添加 option就是添加到 options那个容器中
       options += key -> value
       this
     }
@@ -813,6 +815,7 @@ object SparkSession extends Logging {
      * @since 2.0.0
      */
     def config(key: String, value: Long): Builder = synchronized {
+      // 此处同样是
       options += key -> value.toString
       this
     }
@@ -852,7 +855,7 @@ object SparkSession extends Logging {
     /**
      * Sets the Spark master URL to connect to, such as "local" to run locally, "local[4]" to
      * run locally with 4 cores, or "spark://master:7077" to run on a Spark standalone cluster.
-     *
+     * 配置master地址
      * @since 2.0.0
      */
     def master(master: String): Builder = config("spark.master", master)
@@ -902,7 +905,9 @@ object SparkSession extends Logging {
     def getOrCreate(): SparkSession = synchronized {
       assertOnDriver()
       // Get the session from current thread's active session.
+      // 从threadLocal中获取 sparkSession
       var session = activeThreadSession.get()
+      // 如果sparkSession存在,且没有关闭,则把options中配置,配置到此sparkSession的配置中
       if ((session ne null) && !session.sparkContext.isStopped) {
         applyModifiableSettings(session)
         return session
@@ -986,7 +991,7 @@ object SparkSession extends Logging {
 
   /**
    * Creates a [[SparkSession.Builder]] for constructing a [[SparkSession]].
-   *
+   * 创建的 sparkSession的 build
    * @since 2.0.0
    */
   def builder(): Builder = new Builder
@@ -1078,9 +1083,11 @@ object SparkSession extends Logging {
   ////////////////////////////////////////////////////////////////////////////////////////
 
   /** The active SparkSession for the current thread. */
+    // threadLocal中保存的 sparkSession
   private val activeThreadSession = new InheritableThreadLocal[SparkSession]
 
   /** Reference to the root SparkSession. */
+    // 保存sparkSession
   private val defaultSession = new AtomicReference[SparkSession]
 
   private val HIVE_SESSION_STATE_BUILDER_CLASS_NAME =
