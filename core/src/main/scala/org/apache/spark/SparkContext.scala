@@ -83,9 +83,9 @@ class SparkContext(config: SparkConf) extends Logging {
   // context as having started construction.
   // NOTE: this must be placed at the beginning of the SparkContext constructor.
   SparkContext.markPartiallyConstructed(this, allowMultipleContexts)
-
+  // 记录开始时间
   val startTime = System.currentTimeMillis()
-
+  // 停止标志位
   private[spark] val stopped: AtomicBoolean = new AtomicBoolean(false)
 
   private[spark] def assertNotStopped(): Unit = {
@@ -361,7 +361,9 @@ class SparkContext(config: SparkConf) extends Logging {
   }
 
   try {
+    // 可以看到此 配置 就是构造函数传递进来的
     _conf = config.clone()
+    // 校验 配置
     _conf.validateSettings()
 
     if (!_conf.contains("spark.master")) {
@@ -390,7 +392,7 @@ class SparkContext(config: SparkConf) extends Logging {
     _conf.setIfMissing("spark.driver.port", "0")
 
     _conf.set("spark.executor.id", SparkContext.DRIVER_IDENTIFIER)
-
+  // jars 同样是从  conf中来读取
     _jars = Utils.getUserJars(_conf)
     _files = _conf.getOption("spark.files").map(_.split(",")).map(_.filter(_.nonEmpty))
       .toSeq.flatten
@@ -490,27 +492,32 @@ class SparkContext(config: SparkConf) extends Logging {
       HeartbeatReceiver.ENDPOINT_NAME, new HeartbeatReceiver(this))
 
     // Create and start the scheduler
+    // 重点   创建 taskScheduler
     val (sched, ts) = SparkContext.createTaskScheduler(this, master, deployMode)
     _schedulerBackend = sched
     _taskScheduler = ts
+    // 创建 DAGScheduler
     _dagScheduler = new DAGScheduler(this)
     _heartbeatReceiver.ask[Boolean](TaskSchedulerIsSet)
 
     // start TaskScheduler after taskScheduler sets DAGScheduler reference in DAGScheduler's
     // constructor
     _taskScheduler.start()
-
+    // 从taskScheduler 来获取 application的id 以及 attemptId
     _applicationId = _taskScheduler.applicationId()
     _applicationAttemptId = taskScheduler.applicationAttemptId()
+    // 保存一下app.id
     _conf.set("spark.app.id", _applicationId)
     if (_conf.getBoolean("spark.ui.reverseProxy", false)) {
       System.setProperty("spark.ui.proxyBase", "/proxy/" + _applicationId)
     }
     _ui.foreach(_.setAppId(_applicationId))
+    //
     _env.blockManager.initialize(_applicationId)
 
     // The metrics system for Driver need to be set spark.app.id to app ID.
     // So it should start after we get app ID from the task scheduler and set spark.app.id.
+    // 指标系统启动
     _env.metricsSystem.start()
     // Attach the driver metrics servlet handler to the web ui after the metrics system is started.
     _env.metricsSystem.getServletHandlers.foreach(handler => ui.foreach(_.attachHandler(handler)))
@@ -557,7 +564,9 @@ class SparkContext(config: SparkConf) extends Logging {
     postApplicationStart()
 
     // Post init
+    //
     _taskScheduler.postStartHook()
+    // 向指标系统中注册 指标资源
     _env.metricsSystem.registerSource(_dagScheduler.metricsSource)
     _env.metricsSystem.registerSource(new BlockManagerSource(_env.blockManager))
     _executorAllocationManager.foreach { e =>
@@ -2447,6 +2456,7 @@ object SparkContext extends Logging {
   /**
    * Lock that guards access to global variables that track SparkContext construction.
    */
+   // 创建SparkContext 时的锁
   private val SPARK_CONTEXT_CONSTRUCTOR_LOCK = new Object()
 
   /**
@@ -2454,6 +2464,7 @@ object SparkContext extends Logging {
    *
    * Access to this field is guarded by SPARK_CONTEXT_CONSTRUCTOR_LOCK.
    */
+    // 保存全局的sparkContext
   private val activeContext: AtomicReference[SparkContext] =
     new AtomicReference[SparkContext](null)
 
@@ -2517,6 +2528,7 @@ object SparkContext extends Logging {
     // Synchronize to ensure that multiple create requests don't trigger an exception
     // from assertNoOtherContextIsRunning within setActiveContext
     SPARK_CONTEXT_CONSTRUCTOR_LOCK.synchronized {
+      // 如果全局的sparkContext 为null, 则创建一个,并保存到activeContext
       if (activeContext.get() == null) {
         setActiveContext(new SparkContext(config), allowMultipleContexts = false)
       } else {
@@ -2524,6 +2536,7 @@ object SparkContext extends Logging {
           logWarning("Using an existing SparkContext; some configuration may not take effect.")
         }
       }
+      // 获取全局的sparkContext
       activeContext.get()
     }
   }
