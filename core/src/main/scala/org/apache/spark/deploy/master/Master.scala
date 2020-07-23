@@ -306,18 +306,24 @@ private[deploy] class Master(
             + workerAddress))
         }
       }
-
+    // 接收到 AppClient发送过来的 注册Application消息
     case RegisterApplication(description, driver) =>
       // TODO Prevent repeated registrations from some driver
       if (state == RecoveryState.STANDBY) {
         // ignore, don't send response
       } else {
         logInfo("Registering app " + description.name)
+        // 创建app
         val app = createApplication(description, driver)
+        // 注册 app
         registerApplication(app)
         logInfo("Registered app " + description.name + " with ID " + app.id)
         persistenceEngine.addApplication(app)
+        // 回复 driver RegisteredApplication消息
         driver.send(RegisteredApplication(app.id, self))
+        // 调度
+        // 1.找合适的worker 来启动driver
+        // 2.找合适的worker 来启动 executor 运行 application
         schedule()
       }
 
@@ -935,7 +941,8 @@ private[deploy] class Master(
       logInfo("Attempted to re-register application at same address: " + appAddress)
       return
     }
-
+    // 记录app信息
+    // 并 更新此app到指标系统
     applicationMetricsSystem.registerSource(app.appSource)
     apps += app
     idToApp(app.id) = app

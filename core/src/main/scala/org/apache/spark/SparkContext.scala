@@ -492,7 +492,7 @@ class SparkContext(config: SparkConf) extends Logging {
       HeartbeatReceiver.ENDPOINT_NAME, new HeartbeatReceiver(this))
 
     // Create and start the scheduler
-    // 重点   创建 taskScheduler
+    // 重点   创建 taskScheduler 和 backend
     val (sched, ts) = SparkContext.createTaskScheduler(this, master, deployMode)
     _schedulerBackend = sched
     _taskScheduler = ts
@@ -2752,6 +2752,8 @@ object SparkContext extends Logging {
         }
         val scheduler = new TaskSchedulerImpl(sc, MAX_LOCAL_TASK_FAILURES, isLocal = true)
         val backend = new LocalSchedulerBackend(sc.getConf, scheduler, threadCount)
+        // 先调用 scheduler.initializer进行调度的初始化,以及获取到了 backend
+        // 之后调用start
         scheduler.initialize(backend)
         (backend, scheduler)
 

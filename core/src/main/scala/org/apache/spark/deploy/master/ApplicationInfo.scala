@@ -36,6 +36,7 @@ private[spark] class ApplicationInfo(
   extends Serializable {
 
   @transient var state: ApplicationState.Value = _
+                // 记录启动的executor, key为 executorId
   @transient var executors: mutable.HashMap[Int, ExecutorDesc] = _
   @transient var removedExecutors: ArrayBuffer[ExecutorDesc] = _
   @transient var coresGranted: Int = _
@@ -66,7 +67,7 @@ private[spark] class ApplicationInfo(
     removedExecutors = new ArrayBuffer[ExecutorDesc]
     executorLimit = desc.initialExecutorLimit.getOrElse(Integer.MAX_VALUE)
   }
-
+  // executorId的生成 可见是一个int值的递增
   private def newExecutorId(useID: Option[Int] = None): Int = {
     useID match {
       case Some(id) =>
@@ -83,7 +84,9 @@ private[spark] class ApplicationInfo(
       worker: WorkerInfo,
       cores: Int,
       useID: Option[Int] = None): ExecutorDesc = {
+    // newExecutorId对executorId的生成,也就是int值递增
     val exec = new ExecutorDesc(newExecutorId(useID), this, worker, cores, desc.memoryPerExecutorMB)
+    // 记录此executor
     executors(exec.id) = exec
     coresGranted += cores
     exec

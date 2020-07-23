@@ -114,6 +114,7 @@ private object ParallelCollectionRDD {
    * it efficient to run Spark over RDDs representing large sets of numbers. And if the collection
    * is an inclusive Range, we use inclusive range for the last slice.
    */
+    // 简单说在此伴生对象中,就是对数据集进行分片的操作
   def slice[T: ClassTag](seq: Seq[T], numSlices: Int): Seq[Seq[T]] = {
     if (numSlices < 1) {
       throw new IllegalArgumentException("Positive number of partitions required")

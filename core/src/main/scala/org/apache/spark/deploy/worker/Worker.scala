@@ -527,6 +527,7 @@ private[deploy] class Worker(
       logInfo(s"Master with url $masterUrl requested this worker to reconnect.")
       registerWithMaster()
     // 在worker上启动executor
+      //
     case LaunchExecutor(masterUrl, appId, execId, appDesc, cores_, memory_) =>
       // 如果不是有效的 master发送过来的任务,则 打印warning
       if (masterUrl != activeMasterUrl) {

@@ -71,6 +71,9 @@ private[deploy] class ExecutorRunner(
   // executor的启动
   private[worker] def start() {
     // 启动一个线程来启动 executor
+    // executor真正运行的函数  fetchAndRunExecutor
+    // 从名字看 就是 fetch拉取资源
+    // AndRunExecutor 运行executor
     workerThread = new Thread("ExecutorRunner for " + fullId) {
       override def run() { fetchAndRunExecutor() }
     }
@@ -152,6 +155,7 @@ private[deploy] class ExecutorRunner(
       }
       val subsCommand = appDesc.command.copy(javaOpts = subsOpts)
       // 创建 进程 启动的命令
+      // 在这里就是启动 CoarseGrainedExecutorBackend
       val builder = CommandUtils.buildProcessBuilder(subsCommand, new SecurityManager(conf),
         memory, sparkHome.getAbsolutePath, substituteVariables)
       val command = builder.command()
@@ -193,6 +197,7 @@ private[deploy] class ExecutorRunner(
       val exitCode = process.waitFor()
       state = ExecutorState.EXITED
       val message = "Command exited with code " + exitCode
+      // 向worker 汇报executor状态的消息
       worker.send(ExecutorStateChanged(appId, execId, state, Some(message), Some(exitCode)))
     } catch {
       case interrupted: InterruptedException =>

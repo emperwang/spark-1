@@ -168,6 +168,7 @@ private[spark] class TaskSchedulerImpl(
 
   def initialize(backend: SchedulerBackend) {
     this.backend = backend
+    // 根据不同的模式,来创建调度器
     schedulableBuilder = {
       schedulingMode match {
         case SchedulingMode.FIFO =>

@@ -46,7 +46,7 @@ private[spark] class Pool(
   var stageId = -1
   val name = poolName
   var parent: Pool = null
-
+  // 调度算法,可见算法有两种 FAIR 以及 FIFO
   private val taskSetSchedulingAlgorithm: SchedulingAlgorithm = {
     schedulingMode match {
       case SchedulingMode.FAIR =>

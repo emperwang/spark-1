@@ -48,41 +48,49 @@ private[spark] class StandaloneAppClient(
     listener: StandaloneAppClientListener,
     conf: SparkConf)
   extends Logging {
-
+  // master的地址
   private val masterRpcAddresses = masterUrls.map(RpcAddress.fromSparkURL(_))
-
+  // 注册超时时间
   private val REGISTRATION_TIMEOUT_SECONDS = 20
+  // 注册重试次数
   private val REGISTRATION_RETRIES = 3
-
+  // 和master交互的 endPoint
   private val endpoint = new AtomicReference[RpcEndpointRef]
   private val appId = new AtomicReference[String]
+  // 注册成功的标志
   private val registered = new AtomicBoolean(false)
 
   private class ClientEndpoint(override val rpcEnv: RpcEnv) extends ThreadSafeRpcEndpoint
     with Logging {
-
+    // master的地址
     private var master: Option[RpcEndpointRef] = None
     // To avoid calling listener.disconnected() multiple times
     private var alreadyDisconnected = false
     // To avoid calling listener.dead() multiple times
+    // 死亡标志
     private val alreadyDead = new AtomicBoolean(false)
+    // 注册到master的操作
     private val registerMasterFutures = new AtomicReference[Array[JFuture[_]]]
+    // 注册的重试次数
     private val registrationRetryTimer = new AtomicReference[JScheduledFuture[_]]
 
     // A thread pool for registering with masters. Because registering with a master is a blocking
     // action, this thread pool must be able to create "masterRpcAddresses.size" threads at the same
     // time so that we can register with all masters.
+    // 向master进行注册是阻塞操作,这里使用线程池,来同时向所有master进行注册
     private val registerMasterThreadPool = ThreadUtils.newDaemonCachedThreadPool(
       "appclient-register-master-threadpool",
       masterRpcAddresses.length // Make sure we can register with all masters at the same time
     )
 
     // A scheduled executor for scheduling the registration actions
+    // 重试注册的线程池
     private val registrationRetryThread =
       ThreadUtils.newDaemonSingleThreadScheduledExecutor("appclient-registration-retry-thread")
-
+    // 启动会执行
     override def onStart(): Unit = {
       try {
+        // 注册操作
         registerWithMaster(1)
       } catch {
         case e: Exception =>
@@ -99,11 +107,15 @@ private[spark] class StandaloneAppClient(
       for (masterAddress <- masterRpcAddresses) yield {
         registerMasterThreadPool.submit(new Runnable {
           override def run(): Unit = try {
+            // 如果注册成功,则返回
             if (registered.get) {
               return
             }
             logInfo("Connecting to master " + masterAddress.toSparkURL + "...")
+            // 此举相当于 获取一个可以和master 交互信息的 endpoint
             val masterRef = rpcEnv.setupEndpointRef(masterAddress, Master.ENDPOINT_NAME)
+            // 向master发送 RegisterApplication 消息
+            // 第二个参数标识driver,此处发送自己,说明 standaloneAppClient就是此app的driver
             masterRef.send(RegisterApplication(appDescription, self))
           } catch {
             case ie: InterruptedException => // Cancelled
@@ -273,6 +285,7 @@ private[spark] class StandaloneAppClient(
 
   def start() {
     // Just launch an rpcEndpoint; it will call back into the listener.
+    // 创建了一个rpcEndpoint
     endpoint.set(rpcEnv.setupEndpoint("AppClient", new ClientEndpoint(rpcEnv)))
   }
 

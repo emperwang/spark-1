@@ -36,7 +36,7 @@ import org.apache.spark.scheduler.{ExecutorLossReason, TaskDescription}
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
 import org.apache.spark.serializer.SerializerInstance
 import org.apache.spark.util.{ThreadUtils, Utils}
-
+// executorBackend 主类
 private[spark] class CoarseGrainedExecutorBackend(
     override val rpcEnv: RpcEnv,
     driverUrl: String,
@@ -49,6 +49,7 @@ private[spark] class CoarseGrainedExecutorBackend(
 
   private[this] val stopping = new AtomicBoolean(false)
   var executor: Executor = null
+            // 记录此executor 对应的driver endpint
   @volatile var driver: Option[RpcEndpointRef] = None
 
   // If this CoarseGrainedExecutorBackend is changed to support multiple threads, then this may need
@@ -57,9 +58,11 @@ private[spark] class CoarseGrainedExecutorBackend(
 
   override def onStart() {
     logInfo("Connecting to driver: " + driverUrl)
+    // asyncSetupEndpointRefByURI 和driver的 联通的endpoint
     rpcEnv.asyncSetupEndpointRefByURI(driverUrl).flatMap { ref =>
       // This is a very fast action so we can use "ThreadUtils.sameThread"
       driver = Some(ref)
+      // 向driver发送注册RegisterExecutor 的消息
       ref.ask[Boolean](RegisterExecutor(executorId, self, hostname, cores, extractLogUrls))
     }(ThreadUtils.sameThread).onComplete {
       // This is a very fast action so we can use "ThreadUtils.sameThread"
@@ -184,7 +187,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       appId: String,
       workerUrl: Option[String],
       userClassPath: Seq[URL]) {
-
+    // 日志相关的初始化
     Utils.initDaemon(log)
 
     SparkHadoopUtil.get.runAsSparkUser { () =>
@@ -193,6 +196,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
 
       // Bootstrap to fetch the driver's Spark properties.
       val executorConf = new SparkConf
+      // 创建一个和driver 交流的 endPoint
       val fetcher = RpcEnv.create(
         "driverPropsFetcher",
         hostname,
@@ -200,7 +204,9 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
         executorConf,
         new SecurityManager(executorConf),
         clientMode = true)
+      // 和driver交流的endPoint
       val driver = fetcher.setupEndpointRefByURI(driverUrl)
+      // 向driver发送  RetrieveSparkAppConfig 消息,来获取app的配置
       val cfg = driver.askSync[SparkAppConfig](RetrieveSparkAppConfig)
       val props = cfg.sparkProperties ++ Seq[(String, String)](("spark.app.id", appId))
       fetcher.shutdown()
@@ -222,7 +228,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
 
       val env = SparkEnv.createExecutorEnv(
         driverConf, executorId, hostname, cores, cfg.ioEncryptionKey, isLocal = false)
-
+      //
       env.rpcEnv.setupEndpoint("Executor", new CoarseGrainedExecutorBackend(
         env.rpcEnv, driverUrl, executorId, hostname, cores, userClassPath, env))
       workerUrl.foreach { url =>
@@ -231,7 +237,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       env.rpcEnv.awaitTermination()
     }
   }
-
+  // executor 真正启动的类
   def main(args: Array[String]) {
     var driverUrl: String = null
     var executorId: String = null
@@ -283,7 +289,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
     if (driverUrl == null || executorId == null || cores <= 0 || appId == null) {
       printUsageAndExit()
     }
-
+    // executor运行
     run(driverUrl, executorId, hostname, cores, appId, workerUrl, userClassPath)
     System.exit(0)
   }
