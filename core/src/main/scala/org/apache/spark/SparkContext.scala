@@ -250,6 +250,7 @@ class SparkContext(config: SparkConf) extends Logging {
   private[spark] def listenerBus: LiveListenerBus = _listenerBus
 
   // This function allows components created by SparkEnv to be mocked in unit tests:
+  // 重点, 在此创建了Driver中所有需要的其他模块的实例 并记录了其引用
   private[spark] def createSparkEnv(
       conf: SparkConf,
       isLocal: Boolean,
@@ -359,7 +360,9 @@ class SparkContext(config: SparkConf) extends Logging {
         s" ${SparkContext.VALID_LOG_LEVELS.mkString(",")}")
     Utils.setLogLevel(org.apache.log4j.Level.toLevel(upperCased))
   }
-
+  // todo ------重要------
+  // 在此try中的初始化操作,有 dagSchedular 以及 taskSchedular的初始化
+  //
   try {
     // 可以看到此 配置 就是构造函数传递进来的
     _conf = config.clone()
@@ -423,6 +426,9 @@ class SparkContext(config: SparkConf) extends Logging {
     listenerBus.addToStatusQueue(_statusStore.listener.get)
 
     // Create the Spark execution environment (cache, map output tracker, etc)
+    // sparkEnv的创建
+    // 重点
+    // 在这里创建了所有需要的实例 并记录其引用; 如 blockManager  shuffleManager outputTracker 等重要模块
     _env = createSparkEnv(_conf, isLocal, listenerBus)
     SparkEnv.set(_env)
 
@@ -463,7 +469,7 @@ class SparkContext(config: SparkConf) extends Logging {
     if (files != null) {
       files.foreach(addFile)
     }
-
+    // 获取executor内存; 从这里可以看到 其获取配置的顺序
     _executorMemory = _conf.getOption("spark.executor.memory")
       .orElse(Option(System.getenv("SPARK_EXECUTOR_MEMORY")))
       .orElse(Option(System.getenv("SPARK_MEM"))
@@ -488,11 +494,13 @@ class SparkContext(config: SparkConf) extends Logging {
 
     // We need to register "HeartbeatReceiver" before "createTaskScheduler" because Executor will
     // retrieve "HeartbeatReceiver" in the constructor. (SPARK-6640)
+    // 检测心跳的 rpcEnv
     _heartbeatReceiver = env.rpcEnv.setupEndpoint(
       HeartbeatReceiver.ENDPOINT_NAME, new HeartbeatReceiver(this))
 
     // Create and start the scheduler
-    // 重点   创建 taskScheduler 和 backend
+    // 重点
+    // 创建 taskScheduler 和 backend
     val (sched, ts) = SparkContext.createTaskScheduler(this, master, deployMode)
     _schedulerBackend = sched
     _taskScheduler = ts
@@ -2058,6 +2066,7 @@ class SparkContext(config: SparkConf) extends Logging {
       func: (TaskContext, Iterator[T]) => U,
       partitions: Seq[Int],
       resultHandler: (Int, U) => Unit): Unit = {
+    // 如果已经停止了, 则抛错
     if (stopped.get()) {
       throw new IllegalStateException("SparkContext has been shutdown")
     }
@@ -2068,8 +2077,11 @@ class SparkContext(config: SparkConf) extends Logging {
       logInfo("RDD's recursive dependencies:\n" + rdd.toDebugString)
     }
     // 任务提交
+    // 使用 sparkContext -> dagScheduler 提交任务
+    // 到这里先看一下 sparkContext中 dagScheduler的初始化, 看起初始化的具体的哪一个类,做了哪些工作
     dagScheduler.runJob(rdd, cleanedFunc, partitions, callSite, resultHandler, localProperties.get)
     progressBar.foreach(_.finishAll())
+    // checkPoint
     rdd.doCheckpoint()
   }
 
@@ -2158,6 +2170,7 @@ class SparkContext(config: SparkConf) extends Logging {
    * @param rdd target RDD to run tasks on
    * @param processPartition a function to run on each partition of the RDD
    * @param resultHandler callback to pass each result to
+   *  提交任务到集群中
    */
   def runJob[T, U: ClassTag](
       rdd: RDD[T],
@@ -2165,6 +2178,11 @@ class SparkContext(config: SparkConf) extends Logging {
       resultHandler: (Int, U) => Unit)
   {
     val processFunc = (context: TaskContext, iter: Iterator[T]) => processPartition(iter)
+    // 提交job
+    // resultHandler  用于合并结果的函数
+    // rdd.partitions.length rdd的分区数
+    // processPartition  传递进来的对分区的处理
+    // rdd   具体要处理的结果集
     runJob[T, U](rdd, processFunc, 0 until rdd.partitions.length, resultHandler)
   }
 
@@ -2756,7 +2774,8 @@ object SparkContext extends Logging {
         // 之后调用start
         scheduler.initialize(backend)
         (backend, scheduler)
-
+      // 创建的 taskScheduler是TaskSchedulerImpl
+      // 创建的 schedulerbackend 是LocalSchedulerBackend
       case LOCAL_N_FAILURES_REGEX(threads, maxFailures) =>
         def localCpuCount: Int = Runtime.getRuntime.availableProcessors()
         // local[*, M] means the number of cores on the computer with M failures
@@ -2766,11 +2785,13 @@ object SparkContext extends Logging {
         val backend = new LocalSchedulerBackend(sc.getConf, scheduler, threadCount)
         scheduler.initialize(backend)
         (backend, scheduler)
-
+      // 创建的 taskScheduler是TaskSchedulerImpl
+      // 创建的 schedulerbackend 是 StandaloneSchedulerBackend
       case SPARK_REGEX(sparkUrl) =>
         val scheduler = new TaskSchedulerImpl(sc)
         val masterUrls = sparkUrl.split(",").map("spark://" + _)
         val backend = new StandaloneSchedulerBackend(scheduler, sc, masterUrls)
+        // taskScheduler的初始化 并记录 backend
         scheduler.initialize(backend)
         (backend, scheduler)
 

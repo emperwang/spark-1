@@ -63,7 +63,7 @@ private[spark] class TaskSchedulerImpl(
   extends TaskScheduler with Logging {
 
   import TaskSchedulerImpl._
-
+  // taskScheduler的构造函数
   def this(sc: SparkContext) = {
     this(sc, sc.conf.get(config.MAX_TASK_FAILURES))
   }
@@ -71,7 +71,7 @@ private[spark] class TaskSchedulerImpl(
   // Lazily initializing blacklistTrackerOpt to avoid getting empty ExecutorAllocationClient,
   // because ExecutorAllocationClient is created after this TaskSchedulerImpl.
   private[scheduler] lazy val blacklistTrackerOpt = maybeCreateBlacklistTracker(sc)
-
+  // sparkConf的记录
   val conf = sc.conf
 
   // How often to check for speculative tasks
@@ -104,6 +104,7 @@ private[spark] class TaskSchedulerImpl(
   private val starvationTimer = new Timer(true)
 
   // Incrementing task IDs
+  // 可见生成taskId的方法  是 long来递增得到
   val nextTaskId = new AtomicLong(0)
 
   // IDs of the tasks running on each executor
@@ -115,6 +116,7 @@ private[spark] class TaskSchedulerImpl(
 
   // The set of executors we have on each host; this is used to compute hostsAlive, which
   // in turn is used to decide when we can attain data locality on a given host
+  // executor 和host的对应关系
   protected val hostToExecutors = new HashMap[String, HashSet[String]]
 
   protected val hostsByRack = new HashMap[String, HashSet[String]]
@@ -165,8 +167,9 @@ private[spark] class TaskSchedulerImpl(
   override def setDAGScheduler(dagScheduler: DAGScheduler) {
     this.dagScheduler = dagScheduler
   }
-
+  // taskScheduler 先进行 initialize 在进行 start
   def initialize(backend: SchedulerBackend) {
+    // 记录传递进来的 backend
     this.backend = backend
     // 根据不同的模式,来创建调度器
     schedulableBuilder = {
@@ -180,14 +183,19 @@ private[spark] class TaskSchedulerImpl(
           s"$schedulingMode")
       }
     }
+    // 对调度器的一些工作
     schedulableBuilder.buildPools()
   }
-
+  // 生成taskid
   def newTaskId(): Long = nextTaskId.getAndIncrement()
-
+  // initialize 之后, 就调用start 启动
   override def start() {
+    // 在这里先进行了 backend的启动
+    // backend是  StandaloneSchedulerBackend
+    // 看一下此backend start做了什么工作
     backend.start()
 
+    // 这里提交了一个任务
     if (!isLocal && conf.getBoolean("spark.speculation", false)) {
       logInfo("Starting speculative execution thread")
       speculationScheduler.scheduleWithFixedDelay(new Runnable {
@@ -197,7 +205,7 @@ private[spark] class TaskSchedulerImpl(
       }, SPECULATION_INTERVAL_MS, SPECULATION_INTERVAL_MS, TimeUnit.MILLISECONDS)
     }
   }
-
+  // 等待 backend ready
   override def postStartHook() {
     waitBackendReady()
   }
@@ -224,6 +232,7 @@ private[spark] class TaskSchedulerImpl(
         ts.isZombie = true
       }
       stageTaskSets(taskSet.stageAttemptId) = manager
+      // 添加任务到队列中,来等待task调度执行
       schedulableBuilder.addTaskSetManager(manager, manager.taskSet.properties)
 
       if (!isLocal && !hasReceivedTask) {

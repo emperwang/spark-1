@@ -34,6 +34,7 @@ import org.apache.spark.util.Utils
 /**
  * A [[SchedulerBackend]] implementation for Spark's standalone cluster manager.
  */
+// 这个类很关键哦,可以看到此是 CoarseGrainedSchedulerBackend的子类
 private[spark] class StandaloneSchedulerBackend(
     scheduler: TaskSchedulerImpl,
     sc: SparkContext,
@@ -41,23 +42,29 @@ private[spark] class StandaloneSchedulerBackend(
   extends CoarseGrainedSchedulerBackend(scheduler, sc.env.rpcEnv)
   with StandaloneAppClientListener
   with Logging {
-
+  // driver提价任务的一个 cliend
   private var client: StandaloneAppClient = null
+  // 启动或停止的标志
   private val stopping = new AtomicBoolean(false)
+  //
   private val launcherBackend = new LauncherBackend() {
     override protected def conf: SparkConf = sc.conf
     override protected def onStopRequest(): Unit = stop(SparkAppHandle.State.KILLED)
   }
-
+          // 关闭的回调方法
   @volatile var shutdownCallback: StandaloneSchedulerBackend => Unit = _
   @volatile private var appId: String = _
-
+  // 注册的  栅栏
   private val registrationBarrier = new Semaphore(0)
-
+  // 最大核数
   private val maxCores = conf.getOption("spark.cores.max").map(_.toInt)
+  // 总的 期望的 核数
   private val totalExpectedCores = maxCores.getOrElse(0)
-
+  // 启动操作
   override def start() {
+    // 这就相当于启动了 driver的backend
+    // driver的backend是 StandaloneSchedulerBackend -> CoarseGrainedSchedulerBackend
+    // 这样有了 driver端的 rpcEndpoint driver就算是启动了
     super.start()
 
     // SPARK-21159. The scheduler backend should only try to connect to the launcher when in client
@@ -68,6 +75,7 @@ private[spark] class StandaloneSchedulerBackend(
     }
 
     // The endpoint for executors to talk to us
+    // driver 用来和 executor talk 的rpcEndpoint
     val driverUrl = RpcEndpointAddress(
       sc.conf.get("spark.driver.host"),
       sc.conf.get("spark.driver.port").toInt,
@@ -115,7 +123,8 @@ private[spark] class StandaloneSchedulerBackend(
     // 在schedulerBackend 创建了 ApplicationDescription,也就是对要提交的application的描述
     val appDesc = ApplicationDescription(sc.appName, maxCores, sc.executorMemory, command,
       webUrl, sc.eventLogDir, sc.eventLogCodec, coresPerExecutor, initialExecutorLimit)
-    //
+    // 这里是启动一个客户端来 和 master交互
+    // 并把启动 executor backend的command发送到master,由master来查找worke启动  executor
     client = new StandaloneAppClient(sc.env.rpcEnv, masters, appDesc, this, conf)
     client.start()
     launcherBackend.setState(SparkAppHandle.State.SUBMITTED)

@@ -25,7 +25,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.deploy.ApplicationDescription
 import org.apache.spark.rpc.RpcEndpointRef
 import org.apache.spark.util.Utils
-
+// 记录appliation 信息的类
 private[spark] class ApplicationInfo(
     val startTime: Long,
     val id: String,

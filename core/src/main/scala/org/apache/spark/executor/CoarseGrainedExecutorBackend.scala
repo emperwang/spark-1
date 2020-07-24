@@ -46,7 +46,7 @@ private[spark] class CoarseGrainedExecutorBackend(
     userClassPath: Seq[URL],
     env: SparkEnv)
   extends ThreadSafeRpcEndpoint with ExecutorBackend with Logging {
-
+  // 启停标志
   private[this] val stopping = new AtomicBoolean(false)
   var executor: Executor = null
             // 记录此executor 对应的driver endpint
@@ -80,9 +80,12 @@ private[spark] class CoarseGrainedExecutorBackend(
   }
 
   override def receive: PartialFunction[Any, Unit] = {
+        // driver返回的 executor注册成功的消息
     case RegisteredExecutor =>
       logInfo("Successfully registered with driver")
       try {
+        // 在这里创建了 线程池
+        // 此executor 是具体执行任务的线程池
         executor = new Executor(executorId, hostname, env, userClassPath, isLocal = false)
       } catch {
         case NonFatal(e) =>
@@ -146,7 +149,9 @@ private[spark] class CoarseGrainedExecutorBackend(
   }
 
   override def statusUpdate(taskId: Long, state: TaskState, data: ByteBuffer) {
+    // task的状态更新
     val msg = StatusUpdate(executorId, taskId, state, data)
+    // 向driver发送 task的状态
     driver match {
       case Some(driverRef) => driverRef.send(msg)
       case None => logWarning(s"Drop $msg because has not yet connected to driver")

@@ -56,6 +56,7 @@ private[spark] class StandaloneAppClient(
   private val REGISTRATION_RETRIES = 3
   // 和master交互的 endPoint
   private val endpoint = new AtomicReference[RpcEndpointRef]
+  //
   private val appId = new AtomicReference[String]
   // 注册成功的标志
   private val registered = new AtomicBoolean(false)
@@ -115,7 +116,7 @@ private[spark] class StandaloneAppClient(
             // 此举相当于 获取一个可以和master 交互信息的 endpoint
             val masterRef = rpcEnv.setupEndpointRef(masterAddress, Master.ENDPOINT_NAME)
             // 向master发送 RegisterApplication 消息
-            // 第二个参数标识driver,此处发送自己,说明 standaloneAppClient就是此app的driver
+            // 第二个参数标识driver,此处发送自己; 开始向 driver进行application的注册操作
             masterRef.send(RegisterApplication(appDescription, self))
           } catch {
             case ie: InterruptedException => // Cancelled
@@ -134,14 +135,18 @@ private[spark] class StandaloneAppClient(
      */
     private def registerWithMaster(nthRetry: Int) {
       registerMasterFutures.set(tryRegisterAllMasters())
+      // 这里提交了一个 延迟任务来继续执行提交操作
       registrationRetryTimer.set(registrationRetryThread.schedule(new Runnable {
         override def run(): Unit = {
+          // 如果注册成功了,则关闭其他的注册操作
           if (registered.get) {
             registerMasterFutures.get.foreach(_.cancel(true))
             registerMasterThreadPool.shutdownNow()
+            // 如果注册的重试此处大于REGISTRATION_RETRIES,则进行标记
           } else if (nthRetry >= REGISTRATION_RETRIES) {
             markDead("All masters are unresponsive! Giving up.")
           } else {
+            // 否则 更新重试次数,继续向master进行注册
             registerMasterFutures.get.foreach(_.cancel(true))
             registerWithMaster(nthRetry + 1)
           }
@@ -165,14 +170,18 @@ private[spark] class StandaloneAppClient(
     }
 
     override def receive: PartialFunction[Any, Unit] = {
+          // 向master发送 RegisterApplication 后,master返回的消息
       case RegisteredApplication(appId_, masterRef) =>
         // FIXME How to handle the following cases?
         // 1. A master receives multiple registrations and sends back multiple
         // RegisteredApplications due to an unstable network.
         // 2. Receive multiple RegisteredApplication from different masters because the master is
         // changing.
+        // 记录提交的app的appId
         appId.set(appId_)
+        // 表示注册成功
         registered.set(true)
+        // 记录 master
         master = Some(masterRef)
         listener.connected(appId.get)
 

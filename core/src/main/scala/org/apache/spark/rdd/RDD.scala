@@ -1058,9 +1058,12 @@ abstract class RDD[T: ClassTag](
   /**
    * Reduces the elements of this RDD using the specified commutative and
    * associative binary operator.
+   *  Action 操作才会提交任务
    */
   def reduce(f: (T, T) => T): T = withScope {
+    // 对function做一些清理 ---  作用 ??
     val cleanF = sc.clean(f)
+    // reduce的分区
     val reducePartition: Iterator[T] => Option[T] = iter => {
       if (iter.hasNext) {
         Some(iter.reduceLeft(cleanF))
@@ -1068,7 +1071,9 @@ abstract class RDD[T: ClassTag](
         None
       }
     }
+    // jobResult 存储最终的结果
     var jobResult: Option[T] = None
+    // 定义一个函数,最后合并结果的函数
     val mergeResult = (index: Int, taskResult: Option[T]) => {
       if (taskResult.isDefined) {
         jobResult = jobResult match {
@@ -1080,6 +1085,7 @@ abstract class RDD[T: ClassTag](
     // 提交任务
     sc.runJob(this, reducePartition, mergeResult)
     // Get the final result out of our Option, or throw an exception if the RDD was empty
+    // 获取最终的结果
     jobResult.getOrElse(throw new UnsupportedOperationException("empty collection"))
   }
 

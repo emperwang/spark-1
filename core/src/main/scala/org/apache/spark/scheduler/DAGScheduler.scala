@@ -138,6 +138,7 @@ private[spark] class DAGScheduler(
 
   private[scheduler] val nextJobId = new AtomicInteger(0)
   private[scheduler] def numTotalJobs: Int = nextJobId.get()
+  // stageId的生成
   private val nextStageId = new AtomicInteger(0)
 
   private[scheduler] val jobIdToStageIds = new HashMap[Int, HashSet[Int]]
@@ -447,8 +448,11 @@ private[spark] class DAGScheduler(
     checkBarrierStageWithNumSlots(rdd)
     checkBarrierStageWithRDDChainPattern(rdd, partitions.toSet.size)
     // 获取 或 创建 parent  RDD
+    // **************重点************8
+    // 创建 DAG以及 划分 stage的操作
     val parents = getOrCreateParentStages(rdd, jobId)
     val id = nextStageId.getAndIncrement()
+    // 创建一个 resultStage
     val stage = new ResultStage(id, rdd, func, partitions, parents, jobId, callSite)
     stageIdToStage(id) = stage
     updateJobIdStageIdMaps(jobId, stage)
@@ -1015,10 +1019,12 @@ private[spark] class DAGScheduler(
     finalStage.setActiveJob(job)
     val stageIds = jobIdToStageIds(jobId).toArray
     val stageInfos = stageIds.flatMap(id => stageIdToStage.get(id).map(_.latestInfo))
+    // 向消息总线发送消息  SparkListenerJobStart
     listenerBus.post(
       SparkListenerJobStart(job.jobId, jobSubmissionTime, stageInfos, properties))
 
     // 重点
+    // 提交stage
     submitStage(finalStage)
   }
 
@@ -1067,6 +1073,7 @@ private[spark] class DAGScheduler(
 
   /** Submits stage, but first recursively submits any missing parents. */
     // 提交stage
+    // 如果stage有父stage 则先提交父stage
   private def submitStage(stage: Stage) {
     val jobId = activeJobForStage(stage)
     if (jobId.isDefined) {
@@ -1077,13 +1084,14 @@ private[spark] class DAGScheduler(
         logDebug("missing: " + missing)
         if (missing.isEmpty) {
           logInfo("Submitting " + stage + " (" + stage.rdd + "), which has no missing parents")
-          // 重点
+          // *********重点*************
           submitMissingTasks(stage, jobId.get)
         } else {
           for (parent <- missing) {
             // 如果有缺失的parent 则再次提交parent任务
             submitStage(parent)
           }
+          // 把本次 stage 添加到 等待执行的stage中
           waitingStages += stage
         }
       }
@@ -1108,6 +1116,7 @@ private[spark] class DAGScheduler(
     // serializable. If tasks are not serializable, a SparkListenerStageCompleted event
     // will be posted, which should always come after a corresponding SparkListenerStageSubmitted
     // event.
+    // 从这里可以看到 stage只有两种
     stage match {
       case s: ShuffleMapStage =>
         outputCommitCoordinator.stageStart(stage = s.id, maxPartitionId = s.numPartitions - 1)
@@ -1142,6 +1151,7 @@ private[spark] class DAGScheduler(
     if (partitionsToCompute.nonEmpty) {
       stage.latestInfo.submissionTime = Some(clock.getTimeMillis())
     }
+    // 消息总线发送消息 SparkListenerStageSubmitted
     listenerBus.post(SparkListenerStageSubmitted(stage.latestInfo, properties))
 
     // TODO: Maybe we can keep the taskBinary in Stage to avoid serializing it multiple times.
@@ -1150,6 +1160,7 @@ private[spark] class DAGScheduler(
     // task gets a different copy of the RDD. This provides stronger isolation between tasks that
     // might modify state of objects referenced in their closures. This is necessary in Hadoop
     // where the JobConf/Configuration object is not thread-safe.
+    // 下面开始 对任务开始 序列化
     var taskBinary: Broadcast[Array[Byte]] = null
     var partitions: Array[Partition] = null
     try {
@@ -1224,7 +1235,7 @@ private[spark] class DAGScheduler(
       logInfo(s"Submitting ${tasks.size} missing tasks from $stage (${stage.rdd}) (first 15 " +
         s"tasks are for partitions ${tasks.take(15).map(_.partitionId)})")
       // tasks的提交
-      // 重点 .....
+      // *************重点 .....
       taskScheduler.submitTasks(new TaskSet(
         tasks.toArray, stage.id, stage.latestInfo.attemptNumber, jobId, properties))
     } else {
@@ -2056,7 +2067,7 @@ private[spark] class DAGScheduler(
     eventProcessLoop.stop()
     taskScheduler.stop()
   }
-
+  // 在这里启动了消费消息的线程
   eventProcessLoop.start()
 }
 

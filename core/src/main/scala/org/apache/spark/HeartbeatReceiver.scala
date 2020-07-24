@@ -114,6 +114,7 @@ private[spark] class HeartbeatReceiver(sc: SparkContext, clock: Clock)
     case TaskSchedulerIsSet =>
       scheduler = sc.taskScheduler
       context.reply(true)
+      // 检测Host -> executor
     case ExpireDeadHosts =>
       expireDeadHosts()
       context.reply(true)
@@ -127,6 +128,7 @@ private[spark] class HeartbeatReceiver(sc: SparkContext, clock: Clock)
             override def run(): Unit = Utils.tryLogNonFatalError {
               val unknownExecutor = !scheduler.executorHeartbeatReceived(
                 executorId, accumUpdates, blockManagerId)
+              // 心跳回复
               val response = HeartbeatResponse(reregisterBlockManager = unknownExecutor)
               context.reply(response)
             }
@@ -188,7 +190,7 @@ private[spark] class HeartbeatReceiver(sc: SparkContext, clock: Clock)
   override def onExecutorRemoved(executorRemoved: SparkListenerExecutorRemoved): Unit = {
     removeExecutor(executorRemoved.executorId)
   }
-
+  // 清理过期的executor
   private def expireDeadHosts(): Unit = {
     logTrace("Checking for hosts with no recent heartbeats in HeartbeatReceiver.")
     val now = clock.getTimeMillis()

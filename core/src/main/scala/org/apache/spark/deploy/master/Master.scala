@@ -315,7 +315,7 @@ private[deploy] class Master(
         logInfo("Registering app " + description.name)
         // 创建app
         val app = createApplication(description, driver)
-        // 注册 app
+        // 把创建好的app 记录下来
         registerApplication(app)
         logInfo("Registered app " + description.name + " with ID " + app.id)
         persistenceEngine.addApplication(app)
@@ -765,6 +765,7 @@ private[deploy] class Master(
         // Now that we've decided how many cores to allocate on each worker, let's allocate them
         // 在worker上启动 executor
         for (pos <- 0 until usableWorkers.length if assignedCores(pos) > 0) {
+          // 在worker上启动 executor
           allocateWorkerResourceToExecutors(
             app, assignedCores(pos), app.desc.coresPerExecutor, usableWorkers(pos))
         }
@@ -926,11 +927,12 @@ private[deploy] class Master(
 
     schedule()
   }
-
+  // master根据提交的信息,创建application
   private def createApplication(desc: ApplicationDescription, driver: RpcEndpointRef):
       ApplicationInfo = {
     val now = System.currentTimeMillis()
     val date = new Date(now)
+    // 创建appId
     val appId = newApplicationId(date)
     new ApplicationInfo(now, appId, desc, date, driver, defaultCores)
   }
@@ -1072,6 +1074,7 @@ private[deploy] class Master(
   }
 
   /** Generate a new app ID given an app's submission date */
+    // 可以看到 appId的根式, 由时间 + 4位的 自增数字
   private def newApplicationId(submitDate: Date): String = {
     val appId = "app-%s-%04d".format(createDateFormat.format(submitDate), nextAppNumber)
     nextAppNumber += 1

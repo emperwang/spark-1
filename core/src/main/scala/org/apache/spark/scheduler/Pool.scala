@@ -34,7 +34,7 @@ private[spark] class Pool(
     initMinShare: Int,
     initWeight: Int)
   extends Schedulable with Logging {
-
+  // 存储等待执行的 task
   val schedulableQueue = new ConcurrentLinkedQueue[Schedulable]
   val schedulableNameToSchedulable = new ConcurrentHashMap[String, Schedulable]
   val weight = initWeight
@@ -95,9 +95,10 @@ private[spark] class Pool(
     }
     shouldRevive
   }
-
+  // 获取排序后的任务的队列
   override def getSortedTaskSetQueue: ArrayBuffer[TaskSetManager] = {
     val sortedTaskSetQueue = new ArrayBuffer[TaskSetManager]
+    // 此处对 task 进行排序操作
     val sortedSchedulableQueue =
       schedulableQueue.asScala.toSeq.sortWith(taskSetSchedulingAlgorithm.comparator)
     for (schedulable <- sortedSchedulableQueue) {

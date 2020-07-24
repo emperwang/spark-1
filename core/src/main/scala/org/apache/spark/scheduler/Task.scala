@@ -76,10 +76,12 @@ private[spark] abstract class Task[T](
    * @param attemptNumber how many times this task has been attempted (0 for the first attempt)
    * @return the result of the task along with updates of Accumulators.
    */
+    // driver发送过来的任务的具体的执行
   final def run(
       taskAttemptId: Long,
       attemptNumber: Int,
       metricsSystem: MetricsSystem): T = {
+      // 向 blockManager 注册 此task
     SparkEnv.get.blockManager.registerTask(taskAttemptId)
     // TODO SPARK-24874 Allow create BarrierTaskContext based on partitions, instead of whether
     // the stage is barrier.
@@ -120,6 +122,7 @@ private[spark] abstract class Task[T](
       Option(attemptNumber)).setCurrentContext()
 
     try {
+      // 开始运行任务
       runTask(context)
     } catch {
       case e: Throwable =>

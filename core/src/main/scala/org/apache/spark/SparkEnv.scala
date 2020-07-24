@@ -246,6 +246,7 @@ object SparkEnv extends Logging {
     }
 
     val systemName = if (isDriver) driverSystemName else executorSystemName
+    // rpcEnv的创建
     val rpcEnv = RpcEnv.create(systemName, bindAddress, advertiseAddress, port.getOrElse(-1), conf,
       securityManager, numUsableCores, !isDriver)
 
@@ -300,7 +301,7 @@ object SparkEnv extends Logging {
     }
 
     val broadcastManager = new BroadcastManager(isDriver, conf, securityManager)
-
+    // mapOutputTracker 的创建  对任务信息的一些追踪
     val mapOutputTracker = if (isDriver) {
       new MapOutputTrackerMaster(conf, broadcastManager, isLocal)
     } else {
@@ -335,11 +336,11 @@ object SparkEnv extends Logging {
     } else {
       conf.get(BLOCK_MANAGER_PORT)
     }
-
+    // 数据传输的
     val blockTransferService =
       new NettyBlockTransferService(conf, securityManager, bindAddress, advertiseAddress,
         blockManagerPort, numUsableCores)
-
+    //  BlockManagerMaster 创建的地方,
     val blockManagerMaster = new BlockManagerMaster(registerOrLookupEndpoint(
       BlockManagerMaster.DRIVER_ENDPOINT_NAME,
       new BlockManagerMasterEndpoint(rpcEnv, isLocal, conf, listenerBus)),
@@ -371,6 +372,22 @@ object SparkEnv extends Logging {
     val outputCommitCoordinatorRef = registerOrLookupEndpoint("OutputCommitCoordinator",
       new OutputCommitCoordinatorEndpoint(rpcEnv, outputCommitCoordinator))
     outputCommitCoordinator.coordinatorRef = Some(outputCommitCoordinatorRef)
+    // 真正创建 SparkEnv的地方,其中包含了需要的各种 实例
+    // 看到这些参数 真正大手笔,每一个都是一个模块
+    //      executorId,    executor的id
+    //      rpcEnv,        此drvier的rpcEnv
+    //      serializer,      序列化
+    //      closureSerializer,  闭包序列化
+    //      serializerManager,   序列化管理器
+    //      mapOutputTracker,    outputTracker
+    //      shuffleManager,       shuffle管理器
+    //      broadcastManager,     broadcase管理器
+    //      blockManager,         block 管理器
+    //      securityManager,      安全管理器
+    //      metricsSystem,        监测系统
+    //      memoryManager,        内存管理器
+    //      outputCommitCoordinator,
+    //      conf                  配置
 
     val envInstance = new SparkEnv(
       executorId,
