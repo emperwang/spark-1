@@ -121,7 +121,7 @@ private[spark] class DAGScheduler(
     env: SparkEnv,
     clock: Clock = new SystemClock())
   extends Logging {
-
+  // 辅助构造函数
   def this(sc: SparkContext, taskScheduler: TaskScheduler) = {
     this(
       sc,
@@ -131,17 +131,19 @@ private[spark] class DAGScheduler(
       sc.env.blockManager.master,
       sc.env)
   }
-
+  // 辅助构造函数
   def this(sc: SparkContext) = this(sc, sc.taskScheduler)
-
+  //  DAGSchedulerSource的创建
   private[spark] val metricsSource: DAGSchedulerSource = new DAGSchedulerSource(this)
-
+  // 下一个job的ID生成 策略
   private[scheduler] val nextJobId = new AtomicInteger(0)
+  // 总的job数量
   private[scheduler] def numTotalJobs: Int = nextJobId.get()
   // stageId的生成
   private val nextStageId = new AtomicInteger(0)
-
+  // jobId 和 stageId的映射关系
   private[scheduler] val jobIdToStageIds = new HashMap[Int, HashSet[Int]]
+  // stageId和 stage的映射关系
   private[scheduler] val stageIdToStage = new HashMap[Int, Stage]
   /**
    * Mapping from shuffle dependency ID to the ShuffleMapStage that will generate the data for
@@ -149,18 +151,23 @@ private[spark] class DAGScheduler(
    * that require the shuffle stage complete, the mapping will be removed, and the only record of
    * the shuffle data will be in the MapOutputTracker).
    */
+    // shuffleId和mapStage的映射关系
   private[scheduler] val shuffleIdToMapStage = new HashMap[Int, ShuffleMapStage]
+  // jobId 和 activeJob的映射关系
   private[scheduler] val jobIdToActiveJob = new HashMap[Int, ActiveJob]
 
   // Stages we need to run whose parents aren't done
+  // 等待的 stage
   private[scheduler] val waitingStages = new HashSet[Stage]
 
   // Stages we are running right now
+  // 正在运行的 stage
   private[scheduler] val runningStages = new HashSet[Stage]
 
   // Stages that must be resubmitted due to fetch failures
+  // 失败的stage
   private[scheduler] val failedStages = new HashSet[Stage]
-
+  // activeJobs 的记录
   private[scheduler] val activeJobs = new HashSet[ActiveJob]
 
   /**
@@ -170,6 +177,7 @@ private[spark] class DAGScheduler(
    *
    * All accesses to this map should be guarded by synchronizing on it (see SPARK-4454).
    */
+    // 缓存的 localtion
   private val cacheLocs = new HashMap[Int, IndexedSeq[Seq[TaskLocation]]]
 
   // For tracking failed nodes, we use the MapOutputTracker's epoch number, which is sent with
@@ -178,12 +186,14 @@ private[spark] class DAGScheduler(
   //
   // TODO: Garbage collect information about failure epochs when we know there are no more
   //       stray messages to detect.
+  // 失败的  epoch
   private val failedEpoch = new HashMap[String, Long]
-
+  //
   private [scheduler] val outputCommitCoordinator = env.outputCommitCoordinator
 
   // A closure serializer that we reuse.
   // This is only safe because DAGScheduler runs in a single thread.
+  // 闭包序列化 工具
   private val closureSerializer = SparkEnv.get.closureSerializer.newInstance()
 
   /** If enabled, FetchFailed will not cause stage retry, in order to surface the problem. */
@@ -224,7 +234,7 @@ private[spark] class DAGScheduler(
 
   private val messageScheduler =
     ThreadUtils.newDaemonSingleThreadScheduledExecutor("dag-scheduler-message")
-
+  //eventProcessLoop 是处理消息
   private[spark] val eventProcessLoop = new DAGSchedulerEventProcessLoop(this)
   taskScheduler.setDAGScheduler(this)
 
@@ -970,6 +980,9 @@ private[spark] class DAGScheduler(
     try {
       // New stage creation may throw an exception if, for example, jobs are run on a
       // HadoopRDD whose underlying HDFS files have been deleted.
+      // 创建 resultStage
+      // 重要  重要 重要
+      // 这里进行了 stage的划分
       finalStage = createResultStage(finalRDD, func, partitions, jobId, callSite)
     } catch {
       case e: BarrierJobSlotsNumberCheckFailed =>
@@ -1101,6 +1114,7 @@ private[spark] class DAGScheduler(
   }
 
   /** Called when stage's parents are available and we can now do its task. */
+    // 提交任务
   private def submitMissingTasks(stage: Stage, jobId: Int) {
     logDebug("submitMissingTasks(" + stage + ")")
 
@@ -1235,7 +1249,7 @@ private[spark] class DAGScheduler(
       logInfo(s"Submitting ${tasks.size} missing tasks from $stage (${stage.rdd}) (first 15 " +
         s"tasks are for partitions ${tasks.take(15).map(_.partitionId)})")
       // tasks的提交
-      // *************重点 .....
+      // *************重点 **************
       taskScheduler.submitTasks(new TaskSet(
         tasks.toArray, stage.id, stage.latestInfo.attemptNumber, jobId, properties))
     } else {

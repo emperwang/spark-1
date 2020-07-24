@@ -71,22 +71,29 @@ private[spark] class ResultTask[T, U](
   @transient private[this] val preferredLocs: Seq[TaskLocation] = {
     if (locs == null) Nil else locs.toSet.toSeq
   }
-
+  // task的真实运行
   override def runTask(context: TaskContext): U = {
     // Deserialize the RDD and the func using the broadcast variables.
     val threadMXBean = ManagementFactory.getThreadMXBean
+    // 反序列化的开始时间
     val deserializeStartTime = System.currentTimeMillis()
+    // 反序列的cpu开始时间
     val deserializeStartCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
       threadMXBean.getCurrentThreadCpuTime
     } else 0L
+    // 闭包的 反序列化
     val ser = SparkEnv.get.closureSerializer.newInstance()
+    // taskBinary的反序列
+    // 反序列化 task 以及 rdd
     val (rdd, func) = ser.deserialize[(RDD[T], (TaskContext, Iterator[T]) => U)](
       ByteBuffer.wrap(taskBinary.value), Thread.currentThread.getContextClassLoader)
+    // 反序列的花费的时间
     _executorDeserializeTime = System.currentTimeMillis() - deserializeStartTime
+    // 反序列化花费的cpu 时间
     _executorDeserializeCpuTime = if (threadMXBean.isCurrentThreadCpuTimeSupported) {
       threadMXBean.getCurrentThreadCpuTime - deserializeStartCpuTime
     } else 0L
-
+  // 使用定义的function 对rdd中内容进行执行
     func(context, rdd.iterator(partition, context))
   }
 
