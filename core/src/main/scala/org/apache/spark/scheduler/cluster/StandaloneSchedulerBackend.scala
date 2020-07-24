@@ -126,6 +126,7 @@ private[spark] class StandaloneSchedulerBackend(
     // 这里是启动一个客户端来 和 master交互
     // 并把启动 executor backend的command发送到master,由master来查找worke启动  executor
     client = new StandaloneAppClient(sc.env.rpcEnv, masters, appDesc, this, conf)
+    // 启动
     client.start()
     launcherBackend.setState(SparkAppHandle.State.SUBMITTED)
     waitForRegistration()

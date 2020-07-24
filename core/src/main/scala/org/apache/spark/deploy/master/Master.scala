@@ -766,6 +766,7 @@ private[deploy] class Master(
         // 在worker上启动 executor
         for (pos <- 0 until usableWorkers.length if assignedCores(pos) > 0) {
           // 在worker上启动 executor
+          // 重点  重点 重点
           allocateWorkerResourceToExecutors(
             app, assignedCores(pos), app.desc.coresPerExecutor, usableWorkers(pos))
         }
@@ -796,6 +797,7 @@ private[deploy] class Master(
     for (i <- 1 to numExecutors) {
       val exec = app.addExecutor(worker, coresToAssign)
       // 启动 executor
+      // 重点 重点 重点
       launchExecutor(worker, exec)
       app.state = ApplicationState.RUNNING
     }
@@ -936,7 +938,7 @@ private[deploy] class Master(
     val appId = newApplicationId(date)
     new ApplicationInfo(now, appId, desc, date, driver, defaultCores)
   }
-
+  // 记录application的信息
   private def registerApplication(app: ApplicationInfo): Unit = {
     val appAddress = app.driver.address
     if (addressToApp.contains(appAddress)) {

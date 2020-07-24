@@ -230,10 +230,12 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       cfg.hadoopDelegationCreds.foreach { tokens =>
         SparkHadoopUtil.get.addDelegationTokens(tokens, driverConf)
       }
-
+      // 此操作和 SparkContext中创建SparkEnv的操作是一样的
+      // 创建了很多重量级的 模块实例
+      // 如 blockManager  outputTracker 等
       val env = SparkEnv.createExecutorEnv(
         driverConf, executorId, hostname, cores, cfg.ioEncryptionKey, isLocal = false)
-      //
+      // 创建 executorBackend
       env.rpcEnv.setupEndpoint("Executor", new CoarseGrainedExecutorBackend(
         env.rpcEnv, driverUrl, executorId, hostname, cores, userClassPath, env))
       workerUrl.foreach { url =>
@@ -295,6 +297,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       printUsageAndExit()
     }
     // executor运行
+    // 重点  重点  重点
     run(driverUrl, executorId, hostname, cores, appId, workerUrl, userClassPath)
     System.exit(0)
   }

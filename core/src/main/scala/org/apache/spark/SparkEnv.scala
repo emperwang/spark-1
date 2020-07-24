@@ -164,8 +164,10 @@ object SparkEnv extends Logging {
     assert(conf.contains(DRIVER_HOST_ADDRESS),
       s"${DRIVER_HOST_ADDRESS.key} is not set on the driver!")
     assert(conf.contains("spark.driver.port"), "spark.driver.port is not set on the driver!")
+    // driver的地址
     val bindAddress = conf.get(DRIVER_BIND_ADDRESS)
     val advertiseAddress = conf.get(DRIVER_HOST_ADDRESS)
+    // driver的端口
     val port = conf.get("spark.driver.port").toInt
     val ioEncryptionKey = if (conf.get(IO_ENCRYPTION_ENABLED)) {
       Some(CryptoStreamUtils.createKey(conf))
@@ -213,6 +215,7 @@ object SparkEnv extends Logging {
 
   /**
    * Helper method to create a SparkEnv for a driver or an executor.
+   * 具体创建SparkEnv的地方
    */
   private def create(
       conf: SparkConf,
@@ -232,7 +235,7 @@ object SparkEnv extends Logging {
     if (isDriver) {
       assert(listenerBus != null, "Attempted to create driver SparkEnv with null listener bus!")
     }
-
+    // 创建securotyManager
     val securityManager = new SecurityManager(conf, ioEncryptionKey)
     if (isDriver) {
       securityManager.initializeAuth()
@@ -244,7 +247,7 @@ object SparkEnv extends Logging {
           "wire.")
       }
     }
-
+    // 根据是driver还是 executor 来设置不同的名字
     val systemName = if (isDriver) driverSystemName else executorSystemName
     // rpcEnv的创建
     val rpcEnv = RpcEnv.create(systemName, bindAddress, advertiseAddress, port.getOrElse(-1), conf,
@@ -284,11 +287,11 @@ object SparkEnv extends Logging {
     val serializer = instantiateClassFromConf[Serializer](
       "spark.serializer", "org.apache.spark.serializer.JavaSerializer")
     logDebug(s"Using serializer: ${serializer.getClass}")
-
+    // 序列化 管理器
     val serializerManager = new SerializerManager(serializer, conf, ioEncryptionKey)
-
+    // 闭包序列化
     val closureSerializer = new JavaSerializer(conf)
-
+    // 注册 或者 查找 endpoint
     def registerOrLookupEndpoint(
         name: String, endpointCreator: => RpcEndpoint):
       RpcEndpointRef = {
@@ -299,9 +302,10 @@ object SparkEnv extends Logging {
         RpcUtils.makeDriverRef(name, conf, rpcEnv)
       }
     }
-
+    //  ********重点******* BroadcastManager 管理器
     val broadcastManager = new BroadcastManager(isDriver, conf, securityManager)
-    // mapOutputTracker 的创建  对任务信息的一些追踪
+
+    //  重点  mapOutputTracker 的创建  对任务信息的一些追踪
     val mapOutputTracker = if (isDriver) {
       new MapOutputTrackerMaster(conf, broadcastManager, isLocal)
     } else {
@@ -310,11 +314,13 @@ object SparkEnv extends Logging {
 
     // Have to assign trackerEndpoint after initialization as MapOutputTrackerEndpoint
     // requires the MapOutputTracker itself
+    // outputTracker 的endpoint的注册
     mapOutputTracker.trackerEndpoint = registerOrLookupEndpoint(MapOutputTracker.ENDPOINT_NAME,
       new MapOutputTrackerMasterEndpoint(
         rpcEnv, mapOutputTracker.asInstanceOf[MapOutputTrackerMaster], conf))
 
     // Let the user specify short names for shuffle managers
+    // 获取 shuffleManger的类 并得到其实例
     val shortShuffleMgrNames = Map(
       "sort" -> classOf[org.apache.spark.shuffle.sort.SortShuffleManager].getName,
       "tungsten-sort" -> classOf[org.apache.spark.shuffle.sort.SortShuffleManager].getName)
@@ -336,17 +342,20 @@ object SparkEnv extends Logging {
     } else {
       conf.get(BLOCK_MANAGER_PORT)
     }
-    // 数据传输的
+    // 数据传输的   重要
     val blockTransferService =
       new NettyBlockTransferService(conf, securityManager, bindAddress, advertiseAddress,
         blockManagerPort, numUsableCores)
     //  BlockManagerMaster 创建的地方,
+    // 重要
     val blockManagerMaster = new BlockManagerMaster(registerOrLookupEndpoint(
       BlockManagerMaster.DRIVER_ENDPOINT_NAME,
       new BlockManagerMasterEndpoint(rpcEnv, isLocal, conf, listenerBus)),
       conf, isDriver)
 
     // NB: blockManager is not valid until initialize() is called later.
+    // 重要
+    // blockManager 的创建
     val blockManager = new BlockManager(executorId, rpcEnv, blockManagerMaster,
       serializerManager, conf, memoryManager, mapOutputTracker, shuffleManager,
       blockTransferService, securityManager, numUsableCores)
@@ -365,10 +374,11 @@ object SparkEnv extends Logging {
       ms.start()
       ms
     }
-
+    // OutputCommitCoordinator 创建
     val outputCommitCoordinator = mockOutputCommitCoordinator.getOrElse {
       new OutputCommitCoordinator(conf, isDriver)
     }
+    // 注册 OutputCommitCoordinator的 endpoint
     val outputCommitCoordinatorRef = registerOrLookupEndpoint("OutputCommitCoordinator",
       new OutputCommitCoordinatorEndpoint(rpcEnv, outputCommitCoordinator))
     outputCommitCoordinator.coordinatorRef = Some(outputCommitCoordinatorRef)
@@ -388,7 +398,7 @@ object SparkEnv extends Logging {
     //      memoryManager,        内存管理器
     //      outputCommitCoordinator,
     //      conf                  配置
-
+    /// 具体的创建
     val envInstance = new SparkEnv(
       executorId,
       rpcEnv,

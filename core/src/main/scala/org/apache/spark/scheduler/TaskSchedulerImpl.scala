@@ -61,7 +61,7 @@ private[spark] class TaskSchedulerImpl(
     val maxTaskFailures: Int,
     isLocal: Boolean = false)
   extends TaskScheduler with Logging {
-
+  // 隐士函数
   import TaskSchedulerImpl._
   // taskScheduler的构造函数
   def this(sc: SparkContext) = {
@@ -145,7 +145,8 @@ private[spark] class TaskSchedulerImpl(
       case e: java.util.NoSuchElementException =>
         throw new SparkException(s"Unrecognized $SCHEDULER_MODE_PROPERTY: $schedulingModeConf")
     }
-
+  // Pool会保存提交的那些 task,也就是说 driver的task会放在这里,后面进行任务调度时,也会从此按照
+  // 配置的调度算法来获取task , 并发送给  executor
   val rootPool: Pool = new Pool("", schedulingMode, 0, 0)
 
   // This is a var so that we can reset it for testing purposes.

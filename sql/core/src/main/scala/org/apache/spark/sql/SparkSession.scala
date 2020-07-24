@@ -902,6 +902,7 @@ object SparkSession extends Logging {
      *
      * @since 2.0.0
      */
+      // 获取或者创建一个 SparkSession
     def getOrCreate(): SparkSession = synchronized {
       assertOnDriver()
       // Get the session from current thread's active session.

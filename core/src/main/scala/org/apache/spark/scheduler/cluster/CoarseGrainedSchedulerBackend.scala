@@ -406,6 +406,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   // 可以看住主要的还是 创建了 driver的 rpcEndpoint
   override def start() {
     val properties = new ArrayBuffer[(String, String)]
+    // 相当于复制了一个 以 spark开头的配置
     for ((key, value) <- scheduler.sc.conf.getAll) {
       if (key.startsWith("spark.")) {
         properties += ((key, value))

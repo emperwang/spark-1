@@ -399,7 +399,7 @@ class SparkContext(config: SparkConf) extends Logging {
     _jars = Utils.getUserJars(_conf)
     _files = _conf.getOption("spark.files").map(_.split(",")).map(_.filter(_.nonEmpty))
       .toSeq.flatten
-
+    // event日志的目录
     _eventLogDir =
       if (isEventLogEnabled) {
         val unresolvedDir = conf.get("spark.eventLog.dir", EventLoggingListener.DEFAULT_LOG_DIR)
@@ -408,7 +408,7 @@ class SparkContext(config: SparkConf) extends Logging {
       } else {
         None
       }
-
+    // event日志的压缩算法
     _eventLogCodec = {
       val compress = _conf.getBoolean("spark.eventLog.compress", false)
       if (compress && isEventLogEnabled) {
@@ -506,6 +506,7 @@ class SparkContext(config: SparkConf) extends Logging {
     _taskScheduler = ts
     // 创建 DAGScheduler
     _dagScheduler = new DAGScheduler(this)
+    // 发送一个 TaskSchedulerIsSet 的消息
     _heartbeatReceiver.ask[Boolean](TaskSchedulerIsSet)
 
     // start TaskScheduler after taskScheduler sets DAGScheduler reference in DAGScheduler's
@@ -566,13 +567,15 @@ class SparkContext(config: SparkConf) extends Logging {
         None
       }
     _cleaner.foreach(_.start())
-
+    // 设置 并启动 listenerBus
     setupAndStartListenerBus()
+    // 向listenerBus发送  environmentUpdate 消息
     postEnvironmentUpdate()
+    // 向listenerBus发送 SparkListenerApplicationStart 消息
     postApplicationStart()
 
     // Post init
-    //
+    // 等待 backend ready
     _taskScheduler.postStartHook()
     // 向指标系统中注册 指标资源
     _env.metricsSystem.registerSource(_dagScheduler.metricsSource)
@@ -2394,11 +2397,11 @@ class SparkContext(config: SparkConf) extends Logging {
    * The reasons for this are discussed in https://github.com/mesos/spark/pull/718
    */
   def defaultMinPartitions: Int = math.min(defaultParallelism, 2)
-
+  // 下一个shuffle 编号
   private val nextShuffleId = new AtomicInteger(0)
 
   private[spark] def newShuffleId(): Int = nextShuffleId.getAndIncrement()
-
+  // 下一个 RDD 编号
   private val nextRddId = new AtomicInteger(0)
 
   /** Register a new RDD, returning its RDD ID */
