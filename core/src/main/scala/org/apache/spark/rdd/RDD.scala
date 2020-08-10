@@ -303,10 +303,13 @@ abstract class RDD[T: ClassTag](
    * This should ''not'' be called by users directly, but is available for implementors of custom
    * subclasses of RDD.
    */
+    // 对于一个 rdd的真实计算
   final def iterator(split: Partition, context: TaskContext): Iterator[T] = {
-    if (storageLevel != StorageLevel.NONE) {
+    // 如果有进行 缓存,则先尝试从缓存中获取结果; 如果缓存中没有,则进行计算
+      if (storageLevel != StorageLevel.NONE) {
       getOrCompute(split, context)
     } else {
+        // 进行计算 或者 从 checkpoint中读取结果
       computeOrReadCheckpoint(split, context)
     }
   }
