@@ -55,14 +55,20 @@ private[spark] class FIFOSchedulableBuilder(val rootPool: Pool)
 
 private[spark] class FairSchedulableBuilder(val rootPool: Pool, conf: SparkConf)
   extends SchedulableBuilder with Logging {
-
+  // 设置调度器的配置文件
   val SCHEDULER_ALLOCATION_FILE_PROPERTY = "spark.scheduler.allocation.file"
   val schedulerAllocFile = conf.getOption(SCHEDULER_ALLOCATION_FILE_PROPERTY)
+  // 默认的 公平调度的 配置文件名
   val DEFAULT_SCHEDULER_FILE = "fairscheduler.xml"
+  //
   val FAIR_SCHEDULER_PROPERTIES = "spark.scheduler.pool"
+  // 默认的 pool 的名字
   val DEFAULT_POOL_NAME = "default"
+  // 最小的 cpu数
   val MINIMUM_SHARES_PROPERTY = "minShare"
+  // 调度模式
   val SCHEDULING_MODE_PROPERTY = "schedulingMode"
+  // 权重
   val WEIGHT_PROPERTY = "weight"
   val POOL_NAME_PROPERTY = "@name"
   val POOLS_PROPERTY = "pool"
@@ -73,6 +79,7 @@ private[spark] class FairSchedulableBuilder(val rootPool: Pool, conf: SparkConf)
   override def buildPools() {
     var fileData: Option[(InputStream, String)] = None
     try {
+      // 获取 调用配置文件中的配置
       fileData = schedulerAllocFile.map { f =>
         val fis = new FileInputStream(f)
         logInfo(s"Creating Fair Scheduler pools from $f")
@@ -115,7 +122,7 @@ private[spark] class FairSchedulableBuilder(val rootPool: Pool, conf: SparkConf)
         DEFAULT_POOL_NAME, DEFAULT_SCHEDULING_MODE, DEFAULT_MINIMUM_SHARE, DEFAULT_WEIGHT))
     }
   }
-
+  // 创建公平调度 pool
   private def buildFairSchedulerPool(is: InputStream, fileName: String) {
     val xml = XML.load(is)
     for (poolNode <- (xml \\ POOLS_PROPERTY)) {

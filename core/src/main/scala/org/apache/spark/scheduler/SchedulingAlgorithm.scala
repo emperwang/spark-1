@@ -28,10 +28,16 @@ private[spark] trait SchedulingAlgorithm {
 
 private[spark] class FIFOSchedulingAlgorithm extends SchedulingAlgorithm {
   override def comparator(s1: Schedulable, s2: Schedulable): Boolean = {
+    // 获取各自的 priority 其就是 jobId
     val priority1 = s1.priority
     val priority2 = s2.priority
+    // 比较这两个优先级的大小
+    // res = 1   pri1  大于 pri2
+    // res = -1  pri1 小于 pri2
+    // res = 0  相等
     var res = math.signum(priority1 - priority2)
     if (res == 0) {
+      // 如果两个任务的优先级相等, 则比较其 stageId的大小
       val stageId1 = s1.stageId
       val stageId2 = s2.stageId
       res = math.signum(stageId1 - stageId2)
@@ -42,6 +48,7 @@ private[spark] class FIFOSchedulingAlgorithm extends SchedulingAlgorithm {
 
 private[spark] class FairSchedulingAlgorithm extends SchedulingAlgorithm {
   override def comparator(s1: Schedulable, s2: Schedulable): Boolean = {
+    // 最小数
     val minShare1 = s1.minShare
     val minShare2 = s2.minShare
     val runningTasks1 = s1.runningTasks
