@@ -150,8 +150,10 @@ private[spark] class BlockManager(
     ThreadUtils.newDaemonCachedThreadPool("block-manager-future", 128))
 
   // Actual storage of where blocks are kept
+  // 存储在 内存中
   private[spark] val memoryStore =
     new MemoryStore(conf, blockInfoManager, serializerManager, memoryManager, this)
+  // 存储在 disk 上
   private[spark] val diskStore = new DiskStore(conf, diskBlockManager, securityManager)
   memoryManager.setMemoryStore(memoryStore)
 
@@ -587,7 +589,9 @@ private[spark] class BlockManager(
       case Some(info) =>
         val level = info.level
         logDebug(s"Level for block $blockId is $level")
+        // 获取 task的 taskAttemptId
         val taskAttemptId = Option(TaskContext.get()).map(_.taskAttemptId())
+        // 1. 先尝试从 memoryStore 中去获取
         if (level.useMemory && memoryStore.contains(blockId)) {
           val iter: Iterator[Any] = if (level.deserialized) {
             memoryStore.getValues(blockId).get
@@ -602,7 +606,9 @@ private[spark] class BlockManager(
             releaseLock(blockId, taskAttemptId)
           })
           Some(new BlockResult(ci, DataReadMethod.Memory, info.size))
+          // 2. 在尝试从 diskStore 中获取
         } else if (level.useDisk && diskStore.contains(blockId)) {
+          // 根据blockId去读取文件
           val diskData = diskStore.getBytes(blockId)
           val iterToReturn: Iterator[Any] = {
             if (level.deserialized) {
@@ -720,6 +726,7 @@ private[spark] class BlockManager(
   /**
    * Get block from remote block managers as serialized bytes.
    */
+    // 从 remote 获取 blockId 对应的数据
   def getRemoteBytes(blockId: BlockId): Option[ChunkedByteBuffer] = {
     // TODO SPARK-25905 if we change this method to return the ManagedBuffer, then getRemoteValues
     // could just use the inputStream on the temp file, rather than reading the file into memory.
@@ -732,6 +739,7 @@ private[spark] class BlockManager(
 
     // Because all the remote blocks are registered in driver, it is not necessary to ask
     // all the slave executors to get block status.
+      // 从 blockManagerMaster 中获取此 blockId 对应的位置信息
     val locationsAndStatus = master.getLocationsAndStatus(blockId)
     val blockSize = locationsAndStatus.map { b =>
       b.status.diskSize.max(b.status.memSize)
@@ -754,6 +762,7 @@ private[spark] class BlockManager(
       val loc = locationIterator.next()
       logDebug(s"Getting remote block $blockId from $loc")
       val data = try {
+        // 开始同步拉取数据
         blockTransferService.fetchBlockSync(
           loc.host, loc.port, loc.executorId, blockId.toString, tempFileManager)
       } catch {
@@ -812,11 +821,13 @@ private[spark] class BlockManager(
    * automatically be freed once the result's `data` iterator is fully consumed.
    */
   def get[T: ClassTag](blockId: BlockId): Option[BlockResult] = {
+    // 先在本地获取,如果在本地获取成功了,则直接返回
     val local = getLocalValues(blockId)
     if (local.isDefined) {
       logInfo(s"Found block $blockId locally")
       return local
     }
+    // 本地没有获取到  尝试从remote获取
     val remote = getRemoteValues[T](blockId)
     if (remote.isDefined) {
       logInfo(s"Found block $blockId remotely")
@@ -872,6 +883,7 @@ private[spark] class BlockManager(
       makeIterator: () => Iterator[T]): Either[BlockResult, Iterator[T]] = {
     // Attempt to read the block from local or remote storage. If it's present, then we don't need
     // to go through the local-get-or-put path.
+    // 此 get 是真实获取的操作
     get[T](blockId)(classTag) match {
       case Some(block) =>
         return Left(block)

@@ -353,10 +353,14 @@ abstract class RDD[T: ClassTag](
   /**
    * Gets or computes an RDD partition. Used by RDD.iterator() when an RDD is cached.
    */
+    // 获取 或者 重新计算 partition的值
   private[spark] def getOrCompute(partition: Partition, context: TaskContext): Iterator[T] = {
+      // 根据 rddId 和paraition的 索引生成 此 partition对应的 blockId
+      // "rdd_" + rddId + "_" + splitIndex
     val blockId = RDDBlockId(id, partition.index)
     var readCachedBlock = true
     // This method is called on executors, so we need call SparkEnv.get instead of sc.env.
+      // 根据blockManager 去获取  对应的 value
     SparkEnv.get.blockManager.getOrElseUpdate(blockId, storageLevel, elementClassTag, () => {
       readCachedBlock = false
       computeOrReadCheckpoint(partition, context)
@@ -364,7 +368,9 @@ abstract class RDD[T: ClassTag](
       case Left(blockResult) =>
         if (readCachedBlock) {
           val existingMetrics = context.taskMetrics().inputMetrics
+          // 更新 读取的 字节数
           existingMetrics.incBytesRead(blockResult.bytes)
+          // 创建 一个 InterruptibleIterator
           new InterruptibleIterator[T](context, blockResult.data.asInstanceOf[Iterator[T]]) {
             override def next(): T = {
               existingMetrics.incRecordsRead(1)

@@ -111,7 +111,9 @@ private[spark] class NettyBlockTransferService(
     try {
       val blockFetchStarter = new RetryingBlockFetcher.BlockFetchStarter {
         override def createAndStart(blockIds: Array[String], listener: BlockFetchingListener) {
+          //
           val client = clientFactory.createClient(host, port)
+          // 创建 OneForOneBlockFetcher 并调用其i start 方法开始进行数据传输
           new OneForOneBlockFetcher(client, appId, execId, blockIds, listener,
             transportConf, tempFileManager).start()
         }
@@ -121,8 +123,10 @@ private[spark] class NettyBlockTransferService(
       if (maxRetries > 0) {
         // Note this Fetcher will correctly handle maxRetries == 0; we avoid it just in case there's
         // a bug in this code. We should remove the if statement once we're sure of the stability.
+        // 如果允许重试, 则创建 RetryingBlockFetcher 并调用其i start 开始获取数据
         new RetryingBlockFetcher(transportConf, blockFetchStarter, blockIds, listener).start()
       } else {
+        // 如果不允许重试,直接开始从 remote 获取数据
         blockFetchStarter.createAndStart(blockIds, listener)
       }
     } catch {

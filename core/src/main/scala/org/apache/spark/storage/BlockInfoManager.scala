@@ -121,6 +121,7 @@ private[storage] class BlockInfoManager extends Logging {
    * set-if-not-exists operation ([[lockNewBlockForWriting()]]) and are removed
    * by [[removeBlock()]].
    */
+    // 存储 blockId 对应的 blockInfo的信息
   @GuardedBy("this")
   private[this] val infos = new mutable.HashMap[BlockId, BlockInfo]
 
