@@ -219,8 +219,10 @@ class HadoopRDD[K, V](
         Array.empty[Partition]
     }
   }
-
+  // HadoopRDD的 计算
+  // 由此可见此处的也只是进行了操作的定义,并没有进行计算的操作,等到需要计算时 才会进行计算
   override def compute(theSplit: Partition, context: TaskContext): InterruptibleIterator[(K, V)] = {
+    // 这里创建一个 迭代器, 其中指定了 要获取数据时, 如何进行操作
     val iter = new NextIterator[(K, V)] {
 
       private val split = theSplit.asInstanceOf[HadoopPartition]
@@ -261,7 +263,7 @@ class HadoopRDD[K, V](
       HadoopRDD.addLocalConfiguration(
         new SimpleDateFormat("yyyyMMddHHmmss", Locale.US).format(createTime),
         context.stageId, theSplit.index, context.attemptNumber, jobConf)
-
+     // 获取读取文件数据的 reader
       reader =
         try {
           inputFormat.getRecordReader(split.inputSplit.value, jobConf, Reporter.NULL)
@@ -278,6 +280,7 @@ class HadoopRDD[K, V](
             null
         }
       // Register an on-task-completion callback to close the input stream.
+      // 添加一个完成监听器
       context.addTaskCompletionListener[Unit] { context =>
         // Update the bytes read before closing is to make sure lingering bytesRead statistics in
         // this thread get correctly added.

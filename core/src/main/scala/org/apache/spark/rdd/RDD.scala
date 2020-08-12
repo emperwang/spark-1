@@ -341,11 +341,15 @@ abstract class RDD[T: ClassTag](
   /**
    * Compute an RDD partition or read it from a checkpoint if the RDD is checkpointing.
    */
+    // 重新计算此rdd分区，或者 读取 checkPoint
   private[spark] def computeOrReadCheckpoint(split: Partition, context: TaskContext): Iterator[T] =
   {
+    // 判断是否有 checkPoint
     if (isCheckpointedAndMaterialized) {
+      // 返回此 rdd 依赖的第一个父类 的 iterator
       firstParent[T].iterator(split, context)
     } else {
+      // 重新计算
       compute(split, context)
     }
   }
@@ -363,6 +367,7 @@ abstract class RDD[T: ClassTag](
       // 根据blockManager 去获取  对应的 value
     SparkEnv.get.blockManager.getOrElseUpdate(blockId, storageLevel, elementClassTag, () => {
       readCachedBlock = false
+      // 从 checkPoint中读取或者进行计算
       computeOrReadCheckpoint(partition, context)
     }) match {
       case Left(blockResult) =>
@@ -1689,6 +1694,7 @@ abstract class RDD[T: ClassTag](
    * This is introduced as an alias for `isCheckpointed` to clarify the semantics of the
    * return value. Exposed for testing.
    */
+    // 判断是否有 checkPoint
   private[spark] def isCheckpointedAndMaterialized: Boolean =
     checkpointData.exists(_.isCheckpointed)
 
@@ -1763,7 +1769,7 @@ abstract class RDD[T: ClassTag](
   private[spark] def getCreationSite: String = Option(creationSite).map(_.shortForm).getOrElse("")
 
   private[spark] def elementClassTag: ClassTag[T] = classTag[T]
-
+  // 存储 checkPoint的数据
   private[spark] var checkpointData: Option[RDDCheckpointData[T]] = None
 
   // Whether to checkpoint all ancestor RDDs that are marked for checkpointing. By default,
