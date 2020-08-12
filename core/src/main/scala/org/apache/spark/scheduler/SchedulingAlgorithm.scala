@@ -48,33 +48,43 @@ private[spark] class FIFOSchedulingAlgorithm extends SchedulingAlgorithm {
 
 private[spark] class FairSchedulingAlgorithm extends SchedulingAlgorithm {
   override def comparator(s1: Schedulable, s2: Schedulable): Boolean = {
-    // 最小数
+    // 最小数 资源数 -- cpu 核数
     val minShare1 = s1.minShare
     val minShare2 = s2.minShare
+    // 运行的task 数
     val runningTasks1 = s1.runningTasks
     val runningTasks2 = s2.runningTasks
+    // 任务数 小于 最小资源数,则需要调度
     val s1Needy = runningTasks1 < minShare1
     val s2Needy = runningTasks2 < minShare2
+    // 最小分配的 比率
     val minShareRatio1 = runningTasks1.toDouble / math.max(minShare1, 1.0)
     val minShareRatio2 = runningTasks2.toDouble / math.max(minShare2, 1.0)
     val taskToWeightRatio1 = runningTasks1.toDouble / s1.weight.toDouble
     val taskToWeightRatio2 = runningTasks2.toDouble / s2.weight.toDouble
 
     var compare = 0
+    // 如果 s1 需要调度,s2不需要,则返回true
     if (s1Needy && !s2Needy) {
       return true
+      // s2需要,返回false
     } else if (!s1Needy && s2Needy) {
       return false
     } else if (s1Needy && s2Needy) {
+      // s1和s2都需要,则比较 shareRatio
       compare = minShareRatio1.compareTo(minShareRatio2)
     } else {
+      // 否则比较 taskWeightRatio
       compare = taskToWeightRatio1.compareTo(taskToWeightRatio2)
     }
+    // shareRatio1 小 或者  taskWeight1 小,则返回true
     if (compare < 0) {
       true
     } else if (compare > 0) {
+      // ratio2 大,则返回false
       false
     } else {
+      // 都相等,则比较名字
       s1.name < s2.name
     }
   }

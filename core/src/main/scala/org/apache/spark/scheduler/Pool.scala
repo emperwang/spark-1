@@ -101,6 +101,11 @@ private[spark] class Pool(
     // 此处对 task 进行排序操作
     // 如果是FIFO, 则优先级小的先运行,优先级相等 stageId 小的先运行
     // 如果是 fair
+    // 1. 谁需要的资源少,谁先运行
+    // 2. 谁要运行的任务少,则先运行
+    // 3. 谁的 shareRatio 小,则先运行
+    // 4. 谁的 tashWeight 小,则先运行
+    // 5. 谁的名字小,则先运行
     val sortedSchedulableQueue =
       schedulableQueue.asScala.toSeq.sortWith(taskSetSchedulingAlgorithm.comparator)
     for (schedulable <- sortedSchedulableQueue) {

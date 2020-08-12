@@ -85,6 +85,7 @@ private[spark] class FairSchedulableBuilder(val rootPool: Pool, conf: SparkConf)
         logInfo(s"Creating Fair Scheduler pools from $f")
         Some((fis, f))
       }.getOrElse {
+        // 获取默认的 配置文件 fairscheduler.xml
         val is = Utils.getSparkClassLoader.getResourceAsStream(DEFAULT_SCHEDULER_FILE)
         if (is != null) {
           logInfo(s"Creating Fair Scheduler pools from default file: $DEFAULT_SCHEDULER_FILE")
@@ -96,7 +97,7 @@ private[spark] class FairSchedulableBuilder(val rootPool: Pool, conf: SparkConf)
           None
         }
       }
-
+    //  创建公平调度的 pool
       fileData.foreach { case (is, fileName) => buildFairSchedulerPool(is, fileName) }
     } catch {
       case NonFatal(t) =>
@@ -123,19 +124,36 @@ private[spark] class FairSchedulableBuilder(val rootPool: Pool, conf: SparkConf)
     }
   }
   // 创建公平调度 pool
+  /**
+   * 配置文件实例
+   * <allocations>
+   * <pool name="production">
+   * <schedulingMode>FAIR</schedulingMode>
+   * <weight>1</weight>
+   * <minShare>2</minShare>
+   * </pool>
+   * <pool name="test">
+   * <schedulingMode>FIFO</schedulingMode>
+   * <weight>2</weight>
+   * <minShare>3</minShare>
+   * </pool>
+   * </allocations>
+   */
   private def buildFairSchedulerPool(is: InputStream, fileName: String) {
     val xml = XML.load(is)
     for (poolNode <- (xml \\ POOLS_PROPERTY)) {
-
+      // 获取pool的名字
       val poolName = (poolNode \ POOL_NAME_PROPERTY).text
-
+     //  获取调度的模式
       val schedulingMode = getSchedulingModeValue(poolNode, poolName,
         DEFAULT_SCHEDULING_MODE, fileName)
+      // 获取最小的 资源数 cpu 核数
       val minShare = getIntValue(poolNode, poolName, MINIMUM_SHARES_PROPERTY,
         DEFAULT_MINIMUM_SHARE, fileName)
+      // 权重
       val weight = getIntValue(poolNode, poolName, WEIGHT_PROPERTY,
         DEFAULT_WEIGHT, fileName)
-
+      // 添加一个 子pool到 rootPool中
       rootPool.addSchedulable(new Pool(poolName, schedulingMode, minShare, weight))
 
       logInfo("Created pool: %s, schedulingMode: %s, minShare: %d, weight: %d".format(
