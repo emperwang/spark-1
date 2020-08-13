@@ -343,6 +343,7 @@ private[spark] class MapOutputTrackerMaster(
   // HashMap for storing shuffleStatuses in the driver.
   // Statuses are dropped only by explicit de-registering.
   // Exposed for testing
+  // 存储 shuffleId 和 shuffleStatus的映射关系
   val shuffleStatuses = new ConcurrentHashMap[Int, ShuffleStatus]().asScala
 
   private val maxRpcMessageSize = RpcUtils.maxMessageSizeBytes(conf)

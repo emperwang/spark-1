@@ -255,12 +255,14 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         // Filter out executors under killing
         // 过滤出 active executor
         val activeExecutors = executorDataMap.filterKeys(executorIsAlive)
+        // 此把 所有的 alive的 executor 包装为 WorkerOffer
         val workOffers = activeExecutors.map {
           case (id, executorData) =>
             new WorkerOffer(id, executorData.executorHost, executorData.freeCores,
               Some(executorData.executorAddress.hostPort))
         }.toIndexedSeq
         // 重点 --
+        // 这里 遍历所有的workOffers,即所有的 executor来获取 具体到把任务发送到那个 executor上
         scheduler.resourceOffers(workOffers)
       }
       // 如果存在任务,则启动 task执行任务

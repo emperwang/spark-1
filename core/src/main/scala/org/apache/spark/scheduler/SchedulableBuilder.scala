@@ -211,6 +211,9 @@ private[spark] class FairSchedulableBuilder(val rootPool: Pool, conf: SparkConf)
       } else {
         DEFAULT_POOL_NAME
       }
+    // 获取此 poolName对应的pool中
+    // 没有获取到,则创建一个新的pool 并 添加到 rootpool中
+    // 获取到了,则直接把 taskSetManager 添加到此 pool中
     var parentPool = rootPool.getSchedulableByName(poolName)
     if (parentPool == null) {
       // we will create a new pool that user has configured in app
@@ -224,6 +227,7 @@ private[spark] class FairSchedulableBuilder(val rootPool: Pool, conf: SparkConf)
         s"configuration (schedulingMode: $DEFAULT_SCHEDULING_MODE, " +
         s"minShare: $DEFAULT_MINIMUM_SHARE, weight: $DEFAULT_WEIGHT)")
     }
+    // 添加到 poolName对应的pool中
     parentPool.addSchedulable(manager)
     logInfo("Added task set " + manager.name + " tasks to pool " + poolName)
   }

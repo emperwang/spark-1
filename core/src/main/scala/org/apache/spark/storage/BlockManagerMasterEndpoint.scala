@@ -52,6 +52,7 @@ class BlockManagerMasterEndpoint(
   private val blockManagerIdByExecutor = new mutable.HashMap[String, BlockManagerId]
 
   // Mapping from block id to the set of block managers that have the block.
+  // 缓存  block id 到  block manager的映射关系
   private val blockLocations = new JHashMap[BlockId, mutable.HashSet[BlockManagerId]]
 
   private val askThreadPool =
@@ -86,7 +87,7 @@ class BlockManagerMasterEndpoint(
 
     case GetLocationsAndStatus(blockId) =>
       context.reply(getLocationsAndStatus(blockId))
-
+    // 获取 blcokId的 位置信息
     case GetLocationsMultipleBlockIds(blockIds) =>
       context.reply(getLocationsMultipleBlockIds(blockIds))
 
@@ -433,7 +434,8 @@ class BlockManagerMasterEndpoint(
     }
     true
   }
-
+  // 获取一个block id的位置信息,如果blockLocations中存在,则使用其中的信息
+  // 如果不存在,则返回 seq.empty
   private def getLocations(blockId: BlockId): Seq[BlockManagerId] = {
     if (blockLocations.containsKey(blockId)) blockLocations.get(blockId).toSeq else Seq.empty
   }
@@ -448,7 +450,7 @@ class BlockManagerMasterEndpoint(
       None
     }
   }
-
+  // 获取 blockId的 location信息
   private def getLocationsMultipleBlockIds(
       blockIds: Array[BlockId]): IndexedSeq[Seq[BlockManagerId]] = {
     blockIds.map(blockId => getLocations(blockId))

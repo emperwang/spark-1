@@ -215,6 +215,7 @@ private[spark] class TaskSchedulerImpl(
     val tasks = taskSet.tasks
     logInfo("Adding task set " + taskSet.id + " with " + tasks.length + " tasks")
     this.synchronized {
+      // 针对 taskSet 创建 taskSetManager
       val manager = createTaskSetManager(taskSet, maxTaskFailures)
       val stage = taskSet.stageId
       val stageTaskSets =
@@ -234,6 +235,7 @@ private[spark] class TaskSchedulerImpl(
       }
       stageTaskSets(taskSet.stageAttemptId) = manager
       // 添加任务到队列中,来等待task调度执行
+      // 添加任务到 pool中
       schedulableBuilder.addTaskSetManager(manager, manager.taskSet.properties)
 
       if (!isLocal && !hasReceivedTask) {
@@ -336,17 +338,23 @@ private[spark] class TaskSchedulerImpl(
     var launchedTask = false
     // nodes and executors that are blacklisted for the entire application have already been
     // filtered out by this point
+    // 遍历所有的 executor
     for (i <- 0 until shuffledOffers.size) {
+      // 获取executorId 和  host
       val execId = shuffledOffers(i).executorId
       val host = shuffledOffers(i).host
+      // 可用的 cpu数 大于  CPUS_PER_TASK
       if (availableCpus(i) >= CPUS_PER_TASK) {
         try {
           for (task <- taskSet.resourceOffer(execId, host, maxLocality)) {
+            // 记录任务到  tasks数组中
             tasks(i) += task
             val tid = task.taskId
+            // 记录映射 信息
             taskIdToTaskSetManager.put(tid, taskSet)
             taskIdToExecutorId(tid) = execId
             executorIdToRunningTaskIds(execId).add(tid)
+            // 减少可用的cpu数
             availableCpus(i) -= CPUS_PER_TASK
             assert(availableCpus(i) >= 0)
             // Only update hosts for a barrier task.
@@ -377,6 +385,7 @@ private[spark] class TaskSchedulerImpl(
     // Mark each slave as alive and remember its hostname
     // Also track if new executor is added
     var newExecAvail = false
+    // 此遍历所有的 offers, 相当于是 遍历所有的executor
     for (o <- offers) {
       if (!hostToExecutors.contains(o.host)) {
         hostToExecutors(o.host) = new HashSet[String]()
@@ -388,6 +397,7 @@ private[spark] class TaskSchedulerImpl(
         executorIdToRunningTaskIds(o.executorId) = HashSet[Long]()
         newExecAvail = true
       }
+      // 默认是得不到 rack 信息的
       for (rack <- getRackForHost(o.host)) {
         hostsByRack.getOrElseUpdate(rack, new HashSet[String]()) += o.host
       }
@@ -396,24 +406,27 @@ private[spark] class TaskSchedulerImpl(
     // Before making any offers, remove any nodes from the blacklist whose blacklist has expired. Do
     // this here to avoid a separate thread and added synchronization overhead, and also because
     // updating the blacklist is only relevant when task offers are being made.
+    // 黑名单 更新
     blacklistTrackerOpt.foreach(_.applyBlacklistTimeout())
-
+  // 使用 黑名单 对 alive的 executor 和host 进行过滤
     val filteredOffers = blacklistTrackerOpt.map { blacklistTracker =>
       offers.filter { offer =>
         !blacklistTracker.isNodeBlacklisted(offer.host) &&
           !blacklistTracker.isExecutorBlacklisted(offer.executorId)
       }
     }.getOrElse(offers)
-
+    // shuffleOffers 把 filteredOffers 打乱，避免任务 集中在某台机器
     val shuffledOffers = shuffleOffers(filteredOffers)
     // Build a list of tasks to assign to each worker.
     val tasks = shuffledOffers.map(o => new ArrayBuffer[TaskDescription](o.cores / CPUS_PER_TASK))
     val availableCpus = shuffledOffers.map(o => o.cores).toArray
+    // 获取要执行的任务; 根据不同的调度算法，最终的执行也 不相同
     val sortedTaskSets = rootPool.getSortedTaskSetQueue
     for (taskSet <- sortedTaskSets) {
       logDebug("parentName: %s, name: %s, runningTasks: %s".format(
         taskSet.parent.name, taskSet.name, taskSet.runningTasks))
       if (newExecAvail) {
+        // 计算 taskSet的本地性 ??
         taskSet.executorAdded()
       }
     }
@@ -435,9 +448,11 @@ private[spark] class TaskSchedulerImpl(
         var launchedAnyTask = false
         // Record all the executor IDs assigned barrier tasks on.
         val addressesWithDescs = ArrayBuffer[(String, TaskDescription)]()
+        // 计算 task的 本地性, 并把 taskSet中的任务 放入到 tasks中
         for (currentMaxLocality <- taskSet.myLocalityLevels) {
           var launchedTaskAtCurrentMaxLocality = false
           do {
+            // resourceOfferSingleTaskSet 需要要运行的任务
             launchedTaskAtCurrentMaxLocality = resourceOfferSingleTaskSet(taskSet,
               currentMaxLocality, shuffledOffers, availableCpus, tasks, addressesWithDescs)
             launchedAnyTask |= launchedTaskAtCurrentMaxLocality

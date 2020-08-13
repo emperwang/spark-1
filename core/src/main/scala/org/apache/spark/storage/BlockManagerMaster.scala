@@ -91,6 +91,7 @@ class BlockManagerMaster(
   }
 
   /** Get locations of multiple blockIds from the driver */
+    // 从driver哪里 获取 blockId的位置信息
   def getLocations(blockIds: Array[BlockId]): IndexedSeq[Seq[BlockManagerId]] = {
     driverEndpoint.askSync[IndexedSeq[Seq[BlockManagerId]]](
       GetLocationsMultipleBlockIds(blockIds))

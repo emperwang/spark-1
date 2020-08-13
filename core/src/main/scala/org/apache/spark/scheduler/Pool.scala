@@ -35,7 +35,12 @@ private[spark] class Pool(
     initWeight: Int)
   extends Schedulable with Logging {
   // 存储等待执行的 task
+  // 在 fifo中存储的直接都是 taskSetManager
+  // 在fair中存储的 是 pool
   val schedulableQueue = new ConcurrentLinkedQueue[Schedulable]
+  // name 和 schedulable的映射关系
+  // 此处同样是, fifo中  存储的直接是 taskSetManager
+  // fair中存储的是 pool
   val schedulableNameToSchedulable = new ConcurrentHashMap[String, Schedulable]
   val weight = initWeight
   val minShare = initMinShare
@@ -106,9 +111,15 @@ private[spark] class Pool(
     // 3. 谁的 shareRatio 小,则先运行
     // 4. 谁的 tashWeight 小,则先运行
     // 5. 谁的名字小,则先运行
+
+    // 如果是 fifo 来获取任务,那么这里排序完成后,就直接返回的是 taskManager
+    // 如果是 fair 来获取任务,那么这里拍完序后, 返回的是 pool
     val sortedSchedulableQueue =
       schedulableQueue.asScala.toSeq.sortWith(taskSetSchedulingAlgorithm.comparator)
     for (schedulable <- sortedSchedulableQueue) {
+      // 如果是fifo, 那么这里就直接返回了 taskSetManager了
+      // 如果是fair,那么这里是再次调用  pool的getSortedTaskSetQueue方法, 并在pool的内部再次进行排序
+      // 也就是说fair内部是pool, pool内部再次使用 fifo算法来 获取要执行的任务
       sortedTaskSetQueue ++= schedulable.getSortedTaskSetQueue
     }
     sortedTaskSetQueue
