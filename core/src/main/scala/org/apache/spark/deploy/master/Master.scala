@@ -659,15 +659,20 @@ private[deploy] class Master(
    * allocated at a time, 12 cores from each worker would be assigned to each executor.
    * Since 12 < 16, no executors would launch [SPARK-8881].
    */
+    // 1. 调度那些worker要启动 executor
+    // 2. 要启动executor的worker 分配的 core 数量
+    // 分配core到worker时,有两个模式
+    // 1. 尽量分配到多的worker上,也就是每个worker分配的 core数量比较少
+    // 2. 尽量分配到少的worker上,也就是每个worker分配到尽量多的core
   private def scheduleExecutorsOnWorkers(
       app: ApplicationInfo,
       usableWorkers: Array[WorkerInfo],
       spreadOutApps: Boolean): Array[Int] = {
     // app配置的  每个 executor的核数
     val coresPerExecutor = app.desc.coresPerExecutor
-    // 最小核数
+    // 每个executor可用的最小核数
     val minCoresPerExecutor = coresPerExecutor.getOrElse(1)
-    // coresPerExecutor 是否为空
+    // 是否是每一个 worker启动一个 executor
     val oneExecutorPerWorker = coresPerExecutor.isEmpty
     // app设置的每个 executor的内存
     val memoryPerExecutor = app.desc.memoryPerExecutorMB
@@ -676,8 +681,10 @@ private[deploy] class Master(
     // 需要从 每个worker上获取的核数
     val assignedCores = new Array[Int](numUsable) // Number of cores to give to each worker
     // 每一个 worker需要需要启动的executor
+      // assignedExecutors 记录对应的worker要启动的executor的数量
     val assignedExecutors = new Array[Int](numUsable) // Number of new executors on each worker
-    // 需要分配的核数
+    // 在app要用的core数量 和 总的可用的core数量之间选一个比较小的
+      // 可以是 待分配的core数 也可以是 可用的core数
     var coresToAssign = math.min(app.coresLeft, usableWorkers.map(_.coresFree).sum)
 
     /** Return whether the specified worker can launch an executor for this app. */
@@ -686,6 +693,8 @@ private[deploy] class Master(
         // 要分配的 核数 是否大于 最小核数
       val keepScheduling = coresToAssign >= minCoresPerExecutor
         // pos 位置的worker的 可用核数 是否大于 assignedCores
+        // usableWorkers表示可用的worker
+        // assignedCores 记录对应的worker 分配到的core数量
       val enoughCores = usableWorkers(pos).coresFree - assignedCores(pos) >= minCoresPerExecutor
 
       // If we allow multiple executors per worker, then we can always launch new executors.
@@ -696,7 +705,7 @@ private[deploy] class Master(
         val assignedMemory = assignedExecutors(pos) * memoryPerExecutor
         // pos位置的worker 的可用内存是否足够
         val enoughMemory = usableWorkers(pos).memoryFree - assignedMemory >= memoryPerExecutor
-        //
+        // 已经分配的 executor和 app已经使用的 executor 是否在app的 executor 数量限制之下
         val underLimit = assignedExecutors.sum + app.executors.size < app.executorLimit
         keepScheduling && enoughCores && enoughMemory && underLimit
       } else {
@@ -720,9 +729,12 @@ private[deploy] class Master(
 
           // If we are launching one executor per worker, then every iteration assigns 1 core
           // to the executor. Otherwise, every iteration assigns cores to a new executor.
+          // 如果是  每个worker只能启动一个 executor,则assignedExecutors(pos) 设置为1,表示pos对应的worker
+          // 要启动的executor的数量
           if (oneExecutorPerWorker) {
             assignedExecutors(pos) = 1
           } else {
+            // 如果不是只能启动一个 executor,则要准备启动的 数量增加1
             assignedExecutors(pos) += 1
           }
 
@@ -730,11 +742,21 @@ private[deploy] class Master(
           // many workers as possible. If we are not spreading out, then we should keep
           // scheduling executors on this worker until we use all of its resources.
           // Otherwise, just move on to the next worker.
+          /**
+           * 首先注意这里的while循环是两层,第一层循环是对所有的worker进行遍历,第二层是对上一层遍历到的worker进行
+           * 资源的分配
+           * 重要点在这里:
+           * 1. spreadOutApps 为true,则表示需要扩散 app到尽可能多的executor上.也就是为true,那么对一个worker就循环一次,之后
+           * 就跳到外部的while循环,进行下一个worker的遍历
+           * 2. spreadOutApps为false,则表示app的executor尽量集中到某些worker上,那么就持续对一个worker进行资源分配,直到此worker
+           * 没有资源可用
+           */
           if (spreadOutApps) {
             keepScheduling = false
           }
         }
       }
+      // 过滤出 剩余可用的 worker
       freeWorkers = freeWorkers.filter(canLaunchExecutor)
     }
     assignedCores
@@ -815,6 +837,7 @@ private[deploy] class Master(
     }
     // Drivers take strict precedence over executors
     // 获取ALIVE 的 worker
+    // 把并worke打乱,防止分配时 集中到某些worker上
     val shuffledAliveWorkers = Random.shuffle(workers.toSeq.filter(_.state == WorkerState.ALIVE))
     // 存活的 worker的 数量
     val numWorkersAlive = shuffledAliveWorkers.size
