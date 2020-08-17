@@ -32,7 +32,7 @@ private[spark] object SparkCuratorUtil extends Logging {
   private val ZK_SESSION_TIMEOUT_MILLIS = 60000
   private val RETRY_WAIT_MILLIS = 5000
   private val MAX_RECONNECT_ATTEMPTS = 3
-
+  // 创建一个  curator的客户端
   def newClient(
       conf: SparkConf,
       zkUrlConf: String = "spark.deploy.zookeeper.url"): CuratorFramework = {

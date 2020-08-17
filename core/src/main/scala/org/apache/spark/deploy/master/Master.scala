@@ -252,14 +252,21 @@ private[deploy] class Master(
   }
 
   override def receive: PartialFunction[Any, Unit] = {
+    // leader选举的开始
     case ElectedLeader =>
+      // 先使用序列化器,从zk中读取原来 保存的数据
       val (storedApps, storedDrivers, storedWorkers) = persistenceEngine.readPersistedData(rpcEnv)
+      // 如果没有 保存数据,则直接更改状态为 Alive
       state = if (storedApps.isEmpty && storedDrivers.isEmpty && storedWorkers.isEmpty) {
         RecoveryState.ALIVE
       } else {
+        // 有数据,则更改状态为 RECOVERING
         RecoveryState.RECOVERING
       }
       logInfo("I have been elected leader! New state: " + state)
+      // 如果状态为RECOVERING,则 调用beginRecovery 开始进行获取
+      // 并 启动一个延迟任务,延迟时间为conf.getLong("spark.worker.timeout", 60) * 1000
+      // 此延迟任务主要是发送一个 CompleteRecovery 完成获取的消息给master自己
       if (state == RecoveryState.RECOVERING) {
         beginRecovery(storedApps, storedDrivers, storedWorkers)
         recoveryCompletionTask = forwardMessageThread.schedule(new Runnable {
@@ -268,7 +275,7 @@ private[deploy] class Master(
           }
         }, WORKER_TIMEOUT_MS, TimeUnit.MILLISECONDS)
       }
-
+    // 完成 master恢复的操作
     case CompleteRecovery => completeRecovery()
 
     case RevokedLeadership =>
@@ -571,52 +578,70 @@ private[deploy] class Master(
   private def canCompleteRecovery =
     workers.count(_.state == WorkerState.UNKNOWN) == 0 &&
       apps.count(_.state == ApplicationState.UNKNOWN) == 0
-
+  // leader 读取完 序列化的备份数据, 开始进行恢复操作
   private def beginRecovery(storedApps: Seq[ApplicationInfo], storedDrivers: Seq[DriverInfo],
       storedWorkers: Seq[WorkerInfo]) {
+    // 如果有存储的app,则尝试重新注册 app,并修改器状态为 UNKNOWN, 并向app的driver发送消息 MasterChanged
     for (app <- storedApps) {
       logInfo("Trying to recover app: " + app.id)
       try {
+        // 重新注册app
         registerApplication(app)
+        // 更新app状态
         app.state = ApplicationState.UNKNOWN
+        // 向app的driver发送消息
         app.driver.send(MasterChanged(self, masterWebUiUrl))
       } catch {
         case e: Exception => logInfo("App " + app.id + " had exception on reconnect")
       }
     }
-
+    // 有driver,则保存driver的信息
     for (driver <- storedDrivers) {
       // Here we just read in the list of drivers. Any drivers associated with now-lost workers
       // will be re-launched when we detect that the worker is missing.
       drivers += driver
     }
-
+    // 有保存的worker信息,
+    // 1. 重新注册worker
+    // 2. 更新worker的状态为 UNKNOWN
+    // 3. 向worker发送MasterChanged 的消息
     for (worker <- storedWorkers) {
       logInfo("Trying to recover worker: " + worker.id)
       try {
+        // 重新注册worker
         registerWorker(worker)
+        // 更新worker的状态为 UNKNOWN
         worker.state = WorkerState.UNKNOWN
+        // 向worker 发送消息
         worker.endpoint.send(MasterChanged(self, masterWebUiUrl))
       } catch {
         case e: Exception => logInfo("Worker " + worker.id + " had exception on reconnect")
       }
     }
   }
-
+  // 完成leader的恢复动作
   private def completeRecovery() {
     // Ensure "only-once" recovery semantics using a short synchronization period.
+    // 如果 master的状态不是 RECOVERING,则退出
     if (state != RecoveryState.RECOVERING) { return }
+    // 更新状态
     state = RecoveryState.COMPLETING_RECOVERY
 
     // Kill off any workers and apps that didn't respond to us.
+    // 删除那些没有回复的 worker
     workers.filter(_.state == WorkerState.UNKNOWN).foreach(
       removeWorker(_, "Not responding for recovery"))
+    // 把那些没有回复的 app标记为完成
     apps.filter(_.state == ApplicationState.UNKNOWN).foreach(finishApplication)
 
     // Update the state of recovered apps to RUNNING
+    // 把等待的app标记为  RUNNING
     apps.filter(_.state == ApplicationState.WAITING).foreach(_.state = ApplicationState.RUNNING)
 
     // Reschedule drivers which were not claimed by any workers
+    // 操作那些worker不为空的driver
+    // 1. 如果设置了supervise, 表示重新启动driver
+    // 2. 没有设置supervise,则 移除driver
     drivers.filter(_.worker.isEmpty).foreach { d =>
       logWarning(s"Driver ${d.id} was not found after master recovery")
       if (d.desc.supervise) {
@@ -627,9 +652,11 @@ private[deploy] class Master(
         logWarning(s"Did not re-launch ${d.id} because it was not supervised")
       }
     }
-
+    // 更新状态为 ALIVE
     state = RecoveryState.ALIVE
+    // 进行一些 资源的调度
     schedule()
+    // 打印 完成的 Recovery
     logInfo("Recovery complete - resuming operations!")
   }
 

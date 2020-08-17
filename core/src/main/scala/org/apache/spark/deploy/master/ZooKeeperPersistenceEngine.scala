@@ -48,7 +48,7 @@ private[master] class ZooKeeperPersistenceEngine(conf: SparkConf, val serializer
   override def unpersist(name: String): Unit = {
     zk.delete().forPath(WORKING_DIR + "/" + name)
   }
-
+  // 从zk中数据序列化的数据
   override def read[T: ClassTag](prefix: String): Seq[T] = {
     zk.getChildren.forPath(WORKING_DIR).asScala
       .filter(_.startsWith(prefix)).flatMap(deserializeFromFile[T])
