@@ -123,12 +123,17 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
      // driver endpoint的消息接收
     override def receive: PartialFunction[Any, Unit] = {
+          // 接收到 executor计算完任务后,返回的结果值
       case StatusUpdate(executorId, taskId, state, data) =>
+        // scheduler 进行状态更新
         scheduler.statusUpdate(taskId, state, data.value)
+        // state为完成状态
         if (TaskState.isFinished(state)) {
+          // 更新executor 中可用的资源信息
           executorDataMap.get(executorId) match {
             case Some(executorInfo) =>
               executorInfo.freeCores += scheduler.CPUS_PER_TASK
+              // 记性一下资源调度
               makeOffers(executorId)
             case None =>
               // Ignoring the update since we don't know about the executor.

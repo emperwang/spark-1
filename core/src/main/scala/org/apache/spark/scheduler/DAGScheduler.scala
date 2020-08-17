@@ -263,6 +263,8 @@ private[spark] class DAGScheduler(
       result: Any,
       accumUpdates: Seq[AccumulatorV2[_, _]],
       taskInfo: TaskInfo): Unit = {
+    // 对任务完成的处理
+    // 此处的任务,可能是成功的,也可能是 失败的
     eventProcessLoop.post(
       CompletionEvent(task, reason, result, accumUpdates, taskInfo))
   }
@@ -960,7 +962,7 @@ private[spark] class DAGScheduler(
   private[scheduler] def handleSpeculativeTaskSubmitted(task: Task[_]): Unit = {
     listenerBus.post(SparkListenerSpeculativeTaskSubmitted(task.stageId))
   }
-
+  // 对失败任务的处理
   private[scheduler] def handleTaskSetFailed(
       taskSet: TaskSet,
       reason: String,
@@ -1363,6 +1365,7 @@ private[spark] class DAGScheduler(
    * Responds to a task finishing. This is called inside the event loop so it assumes that it can
    * modify the scheduler's internal state. Use taskEnded() to post a task end event from outside.
    */
+    // 处理执行完成的任务,可能是成功的任务,也可能是失败的任务
   private[scheduler] def handleTaskCompletion(event: CompletionEvent) {
     val task = event.task
     val stageId = task.stageId
@@ -1415,6 +1418,7 @@ private[spark] class DAGScheduler(
     event.reason match {
       case Success =>
         task match {
+            // 如果task是 ResultTask, 则进一步调用用户的代码 来进一步处理
           case rt: ResultTask[_, _] =>
             // Cast to ResultStage here because it's part of the ResultTask
             // TODO Refactor this out to a function that accepts a ResultStage
@@ -1435,6 +1439,7 @@ private[spark] class DAGScheduler(
                   // taskSucceeded runs some user code that might throw an exception. Make sure
                   // we are resilient against that.
                   try {
+                    // 调用用户的 代码来进一步的处理
                     job.listener.taskSucceeded(rt.outputId, event.result)
                   } catch {
                     case e: Exception =>
@@ -1445,19 +1450,21 @@ private[spark] class DAGScheduler(
               case None =>
                 logInfo("Ignoring result from " + rt + " because its job has finished")
             }
-
+         // 如果是 ShuffleMapTask 的处理,则主要是记录结果,用于后面其他task的数据输入
           case smt: ShuffleMapTask =>
             val shuffleStage = stage.asInstanceOf[ShuffleMapStage]
             shuffleStage.pendingPartitions -= task.partitionId
             val status = event.result.asInstanceOf[MapStatus]
             val execId = status.location.executorId
             logDebug("ShuffleMapTask finished on " + execId)
+            // 如果失败,则打印
             if (failedEpoch.contains(execId) && smt.epoch <= failedEpoch(execId)) {
               logInfo(s"Ignoring possibly bogus $smt completion from executor $execId")
             } else {
               // The epoch of the task is acceptable (i.e., the task was launched after the most
               // recent failure we're aware of for the executor), so mark the task's output as
               // available.
+              // 成功,则向mapOutputTracker 中记录此task的结果
               mapOutputTracker.registerMapOutput(
                 shuffleStage.shuffleDep.shuffleId, smt.partitionId, status)
             }
@@ -1660,7 +1667,7 @@ private[spark] class DAGScheduler(
               maybeEpoch = Some(task.epoch))
           }
         }
-
+      // 如果任务失败了,且任务时 Barrier类型,则重新提交任务
       case failure: TaskFailedReason if task.isBarrier =>
         // Also handle the task failed reasons here.
         failure match {
@@ -1742,7 +1749,7 @@ private[spark] class DAGScheduler(
             }
           }
         }
-
+    // 任务重新提交
       case Resubmitted =>
         handleResubmittedFailure(task, stage)
 
@@ -1927,6 +1934,7 @@ private[spark] class DAGScheduler(
    * Aborts all jobs depending on a particular Stage. This is called in response to a task set
    * being canceled by the TaskScheduler. Use taskSetFailed() to inject this event from outside.
    */
+    // aborts 终止那些失败的 stage
   private[scheduler] def abortStage(
       failedStage: Stage,
       reason: String,
@@ -1977,7 +1985,9 @@ private[spark] class DAGScheduler(
           val stage = stageIdToStage(stageId)
           if (runningStages.contains(stage)) {
             try { // cancelTasks will fail if a SchedulerBackend does not implement killTask
+              // 取消任务
               taskScheduler.cancelTasks(stageId, shouldInterruptThread)
+              // 那state标记值  finished
               markStageAsFinished(stage, Some(failureReason))
             } catch {
               case e: UnsupportedOperationException =>
@@ -2166,14 +2176,15 @@ private[scheduler] class DAGSchedulerEventProcessLoop(dagScheduler: DAGScheduler
 
     case SpeculativeTaskSubmitted(task) =>
       dagScheduler.handleSpeculativeTaskSubmitted(task)
-
+   //
     case GettingResultEvent(taskInfo) =>
       dagScheduler.handleGetTaskResult(taskInfo)
-
+    // 任务完成的消息
     case completion: CompletionEvent =>
       dagScheduler.handleTaskCompletion(completion)
-
+    // 任务失败的处理
     case TaskSetFailed(taskSet, reason, exception) =>
+      // 处理失败的task
       dagScheduler.handleTaskSetFailed(taskSet, reason, exception)
 
     case ResubmitFailedStages =>

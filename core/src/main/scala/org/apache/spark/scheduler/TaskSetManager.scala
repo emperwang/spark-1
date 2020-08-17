@@ -841,6 +841,7 @@ private[spark] class TaskSetManager(
    * Marks the task as failed, re-adds it to the list of pending tasks, and notifies the
    * DAG Scheduler.
    */
+    // 处理运行失败的任务
   def handleFailedTask(tid: Long, state: TaskState, reason: TaskFailedReason) {
     val info = taskInfos(tid)
     if (info.failed || info.killed) {
@@ -876,6 +877,7 @@ private[spark] class TaskSetManager(
           // If the task result wasn't serializable, there's no point in trying to re-execute it.
           logError("Task %s in stage %s (TID %d) had a not serializable result: %s; not retrying"
             .format(info.id, taskSet.id, tid, ef.description))
+          //中止  任务
           abort("Task %s in stage %s (TID %d) had a not serializable result: %s".format(
             info.id, taskSet.id, tid, ef.description))
           return
@@ -926,7 +928,7 @@ private[spark] class TaskSetManager(
     if (tasks(index).isBarrier) {
       isZombie = true
     }
-
+    // 处理处理
     sched.dagScheduler.taskEnded(tasks(index), reason, null, accumUpdates, info)
 
     if (!isZombie && reason.countTowardsTaskFailures) {

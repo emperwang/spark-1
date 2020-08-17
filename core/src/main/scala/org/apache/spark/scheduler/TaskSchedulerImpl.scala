@@ -571,13 +571,17 @@ private[spark] class TaskSchedulerImpl(
   protected def shuffleOffers(offers: IndexedSeq[WorkerOffer]): IndexedSeq[WorkerOffer] = {
     Random.shuffle(offers)
   }
-
+  // 当executor计算完task后,把计算结果返回的处理
   def statusUpdate(tid: Long, state: TaskState, serializedData: ByteBuffer) {
+    // 记录失败的 executor
     var failedExecutor: Option[String] = None
+    // 记录失败的原因
     var reason: Option[ExecutorLossReason] = None
     synchronized {
       try {
+        // 获取 taskMager
         Option(taskIdToTaskSetManager.get(tid)) match {
+            // 如果状态为 LOST
           case Some(taskSet) =>
             if (state == TaskState.LOST) {
               // TaskState.LOST is only used by the deprecated Mesos fine-grained scheduling mode,
@@ -585,9 +589,11 @@ private[spark] class TaskSchedulerImpl(
               val execId = taskIdToExecutorId.getOrElse(tid, {
                 val errorMsg =
                   "taskIdToTaskSetManager.contains(tid) <=> taskIdToExecutorId.contains(tid)"
+                // 终止 那些失败的任务
                 taskSet.abort(errorMsg)
                 throw new SparkException(errorMsg)
               })
+              // 此execid 包含在 executorIdToRunningTaskIds,则进行移除
               if (executorIdToRunningTaskIds.contains(execId)) {
                 reason = Some(
                   SlaveLost(s"Task $tid was lost, so marking the executor as lost as well."))
@@ -595,12 +601,15 @@ private[spark] class TaskSchedulerImpl(
                 failedExecutor = Some(execId)
               }
             }
+            // 如果状态是 finished
             if (TaskState.isFinished(state)) {
               cleanupTaskState(tid)
               taskSet.removeRunningTask(tid)
               if (state == TaskState.FINISHED) {
+                // 处理成功完成的任务
                 taskResultGetter.enqueueSuccessfulTask(taskSet, tid, serializedData)
               } else if (Set(TaskState.FAILED, TaskState.KILLED, TaskState.LOST).contains(state)) {
+                // 处理失败的任务
                 taskResultGetter.enqueueFailedTask(taskSet, tid, state, serializedData)
               }
             }
@@ -647,19 +656,20 @@ private[spark] class TaskSchedulerImpl(
   def handleTaskGettingResult(taskSetManager: TaskSetManager, tid: Long): Unit = synchronized {
     taskSetManager.handleTaskGettingResult(tid)
   }
-
+  // 处理执行成功的task
   def handleSuccessfulTask(
       taskSetManager: TaskSetManager,
       tid: Long,
       taskResult: DirectTaskResult[_]): Unit = synchronized {
     taskSetManager.handleSuccessfulTask(tid, taskResult)
   }
-
+  // 处理失败任务
   def handleFailedTask(
       taskSetManager: TaskSetManager,
       tid: Long,
       taskState: TaskState,
       reason: TaskFailedReason): Unit = synchronized {
+    // 处理运行失败的任务
     taskSetManager.handleFailedTask(tid, taskState, reason)
     if (!taskSetManager.isZombie && !taskSetManager.someAttemptSucceeded(tid)) {
       // Need to revive offers again now that the task set manager state has been updated to

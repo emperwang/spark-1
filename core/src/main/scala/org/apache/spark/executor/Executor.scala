@@ -555,7 +555,9 @@ private[spark] class Executor(
         // directSend = sending directly back to the driver
         // 结果值的序列化, 此用于把结果发送给 driver
         val serializedResult: ByteBuffer = {
-          // 如果
+          // 如果值大于 maxResultSize 最大值，则把结果序列化为 IndirectTaskResult
+          // 但是此处只是放入了一个 TaskResultBlockId 和 size, 真正的结果,没有存放
+          // 也就是把 大结果的值, drop掉了
           if (maxResultSize > 0 && resultSize > maxResultSize) {
             logWarning(s"Finished $taskName (TID $taskId). Result is larger than maxResultSize " +
               s"(${Utils.bytesToString(resultSize)} > ${Utils.bytesToString(maxResultSize)}), " +
@@ -564,6 +566,7 @@ private[spark] class Executor(
           } else if (resultSize > maxDirectResultSize) {
             // 此是 把 结果序列化为 ChunkedByteBuffer
             val blockId = TaskResultBlockId(taskId)
+            // 结果存储到本地,
             env.blockManager.putBytes(
               blockId,
               new ChunkedByteBuffer(serializedDirectResult.duplicate()),
