@@ -85,7 +85,7 @@ private[spark] class KafkaRDD[K, V](
       "Use .map to extract fields before calling .persist or .window")
     super.persist(newLevel)
   }
-
+  // 计算此RDD对应的分区
   override def getPartitions: Array[Partition] = {
     offsetRanges.zipWithIndex.map { case (o, i) =>
         new KafkaRDDPartition(i, o.topic, o.partition, o.fromOffset, o.untilOffset)

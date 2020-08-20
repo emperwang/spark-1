@@ -107,6 +107,7 @@ abstract class DStream[T: ClassTag] (
   private var restoredFromCheckpointData = false
 
   // Reference to whole DStream graph
+  // 记录注册的 graph
   private[streaming] var graph: DStreamGraph = null
 
   private[streaming] def isInitialized = zeroTime != null
@@ -330,6 +331,7 @@ abstract class DStream[T: ClassTag] (
    * Get the RDD corresponding to the given time; either retrieve it from cache
    * or compute-and-cache it.
    */
+    // 使用给定的时间,来创建对应的rdd
   private[streaming] final def getOrCompute(time: Time): Option[RDD[T]] = {
     // If RDD was already generated, then retrieve it from HashMap,
     // or else compute the RDD
@@ -433,11 +435,15 @@ abstract class DStream[T: ClassTag] (
    * that materializes the corresponding RDD. Subclasses of DStream may override this
    * to generate their own jobs.
    */
+    // 如果是streaming -kakfa,当前是 DirectKafkaInputDStream,调用其comput创建一个 KafkaRDD,并把其
+    // 作为任务提交到 集群中执行
   private[streaming] def generateJob(time: Time): Option[Job] = {
-    getOrCompute(time) match {
+    // 创建 DirectKafkaInputDStream 的comput方法来创建一个 KafkaRDD
+      getOrCompute(time) match {
       case Some(rdd) =>
         val jobFunc = () => {
           val emptyFunc = { (iterator: Iterator[T]) => {} }
+          // 真正提交streaming 任务
           context.sparkContext.runJob(rdd, emptyFunc)
         }
         Some(new Job(time, jobFunc))

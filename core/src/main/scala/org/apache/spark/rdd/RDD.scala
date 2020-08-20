@@ -265,11 +265,13 @@ abstract class RDD[T: ClassTag](
    * Get the array of partitions of this RDD, taking into account whether the
    * RDD is checkpointed or not.
    */
+    // 计算此RDD 的分区
   final def partitions: Array[Partition] = {
     checkpointRDD.map(_.partitions).getOrElse {
       if (partitions_ == null) {
         stateLock.synchronized {
           if (partitions_ == null) {
+            // 子类实现自己具体的 获取分区数的方法
             partitions_ = getPartitions
             partitions_.zipWithIndex.foreach { case (partition, index) =>
               require(partition.index == index,

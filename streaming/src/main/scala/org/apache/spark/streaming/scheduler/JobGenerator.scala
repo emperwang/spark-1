@@ -245,7 +245,9 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
     // truncated periodically. Otherwise, we may run into stack overflows (SPARK-6847).
     ssc.sparkContext.setLocalProperty(RDD.CHECKPOINT_ALL_MARKED_ANCESTORS, "true")
     Try {
+      // 为任务分配 blockId 以及记录其信息
       jobScheduler.receiverTracker.allocateBlocksToBatch(time) // allocate received blocks to batch
+      // 生成job 并提交到集群中去进行执行
       graph.generateJobs(time) // generate jobs using allocated block
     } match {
       case Success(jobs) =>

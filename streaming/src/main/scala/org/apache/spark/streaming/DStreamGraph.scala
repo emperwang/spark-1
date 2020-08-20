@@ -94,7 +94,7 @@ final private[streaming] class DStreamGraph extends Serializable with Logging {
       inputStreams += inputStream
     }
   }
-
+  // 注册 创建的DStream 到此
   def addOutputStream(outputStream: DStream[_]) {
     this.synchronized {
       outputStream.setGraph(this)
@@ -115,10 +115,11 @@ final private[streaming] class DStreamGraph extends Serializable with Logging {
   def getNumReceivers: Int = numReceivers
 
   def getInputStreamNameAndID: Seq[(String, Int)] = inputStreamNameAndID
-
+  // 生成job  也就是任务
   def generateJobs(time: Time): Seq[Job] = {
     logDebug("Generating jobs for time " + time)
     val jobs = this.synchronized {
+      // 根据注册到 outputStreams 中的 DStream 来创建任务
       outputStreams.flatMap { outputStream =>
         val jobOption = outputStream.generateJob(time)
         jobOption.foreach(_.setCallSite(outputStream.creationSite))
