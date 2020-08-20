@@ -38,6 +38,7 @@ final private[streaming] class DStreamGraph extends Serializable with Logging {
 
   var zeroTime: Time = null
   var startTime: Time = null
+  // 记录了每个批次的时间
   var batchDuration: Duration = null
   @volatile private var numReceivers: Int = 0
 

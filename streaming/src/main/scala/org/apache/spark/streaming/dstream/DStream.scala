@@ -73,9 +73,11 @@ abstract class DStream[T: ClassTag] (
   def slideDuration: Duration
 
   /** List of parent DStreams on which this DStream depends on */
+  // 此RDD的依赖
   def dependencies: List[DStream[_]]
 
   /** Method that generates an RDD for the given time */
+  // 根据指定的时间来 产生RDD
   def compute(validTime: Time): Option[RDD[T]]
 
   // =======================================================================
@@ -83,6 +85,7 @@ abstract class DStream[T: ClassTag] (
   // =======================================================================
 
   // RDDs generated, marked as private[streaming] so that testsuites can access it
+  // 生成的 RDD
   @transient
   private[streaming] var generatedRDDs = new HashMap[Time, RDD[T]]()
 
@@ -98,6 +101,7 @@ abstract class DStream[T: ClassTag] (
   // Checkpoint details
   private[streaming] val mustCheckpoint = false
   private[streaming] var checkpointDuration: Duration = null
+  // checkpoint的处理
   private[streaming] val checkpointData = new DStreamCheckpointData(this)
   @transient
   private var restoredFromCheckpointData = false
@@ -111,6 +115,7 @@ abstract class DStream[T: ClassTag] (
   private[streaming] def parentRememberDuration = rememberDuration
 
   /** Return the StreamingContext associated with this DStream */
+    // 记录上下文
   def context: StreamingContext = ssc
 
   /* Set the creation call site */
@@ -215,7 +220,7 @@ abstract class DStream[T: ClassTag] (
     // Initialize the dependencies
     dependencies.foreach(_.initialize(zeroTime))
   }
-
+  // 安全性校验
   private def validateAtInit(): Unit = {
     ssc.getState() match {
       case StreamingContextState.INITIALIZED =>
@@ -932,6 +937,7 @@ abstract class DStream[T: ClassTag] (
    * Register this streaming as an output stream. This would ensure that RDDs of this
    * DStream will be generated.
    */
+    // 注册此DStream到  context的graph的outputStream
   private[streaming] def register(): DStream[T] = {
     ssc.graph.addOutputStream(this)
     this

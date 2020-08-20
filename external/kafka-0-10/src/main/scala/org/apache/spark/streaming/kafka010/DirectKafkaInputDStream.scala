@@ -55,21 +55,26 @@ private[spark] class DirectKafkaInputDStream[K, V](
     consumerStrategy: ConsumerStrategy[K, V],
     ppc: PerPartitionConfig
   ) extends InputDStream[ConsumerRecord[K, V]](_ssc) with Logging with CanCommitOffsets {
-
+  // 初始拉取消息数
   private val initialRate = context.sparkContext.getConf.getLong(
     "spark.streaming.backpressure.initialRate", 0)
-
+  // executor kakfa 的参数
   val executorKafkaParams = {
     val ekp = new ju.HashMap[String, Object](consumerStrategy.executorKafkaParams)
+    // 重新设置了一下要发送给 executor的 kakfa配置
     KafkaUtils.fixKafkaParams(ekp)
     ekp
   }
-
+  // 存储偏移信息
   protected var currentOffsets = Map[TopicPartition, Long]()
 
   @transient private var kc: Consumer[K, V] = null
+  // 使用已经的consumer,或创建
   def consumer(): Consumer[K, V] = this.synchronized {
     if (null == kc) {
+      // 这里会使用不同的消费策略来进行初始化,
+      // 1. 创建KafkaConsumer
+      // 2. 设置topic的 offset
       kc = consumerStrategy.onStart(currentOffsets.mapValues(l => new java.lang.Long(l)).asJava)
     }
     kc
@@ -110,7 +115,7 @@ private[spark] class DirectKafkaInputDStream[K, V](
 
   // Keep this consistent with how other streams are named (e.g. "Flume polling stream [2]")
   private[streaming] override def name: String = s"Kafka 0.10 direct stream [$id]"
-
+  // 持久化的信息
   protected[streaming] override val checkpointData =
     new DirectKafkaInputDStreamCheckpointData
 
@@ -118,6 +123,7 @@ private[spark] class DirectKafkaInputDStream[K, V](
   /**
    * Asynchronously maintains & sends new rate limits to the receiver through the receiver tracker.
    */
+    // 速率控制器
   override protected[streaming] val rateController: Option[RateController] = {
     if (RateController.isBackPressureEnabled(ssc.conf)) {
       Some(new DirectKafkaRateController(id,
@@ -126,7 +132,7 @@ private[spark] class DirectKafkaInputDStream[K, V](
       None
     }
   }
-
+  // 每个分区数能获得的 最大消息数
   protected[streaming] def maxMessagesPerPartition(
     offsets: Map[TopicPartition, Long]): Option[Map[TopicPartition, Long]] = {
     val estimatedRateLimit = rateController.map { x => {
@@ -166,18 +172,22 @@ private[spark] class DirectKafkaInputDStream[K, V](
    * The concern here is that poll might consume messages despite being paused,
    * which would throw off consumer position.  Fix position if this happens.
    */
+    // 此次主要是再次设置每一个topic的offset为最小的
   private def paranoidPoll(c: Consumer[K, V]): Unit = {
     // don't actually want to consume any messages, so pause all partitions
     c.pause(c.assignment())
+    // 消费消息
     val msgs = c.poll(0)
     if (!msgs.isEmpty) {
       // position should be minimum offset per topicpartition
+      // 根据消费的消息,记录消息中对应的topic的partition的最下offset
       msgs.asScala.foldLeft(Map[TopicPartition, Long]()) { (acc, m) =>
         val tp = new TopicPartition(m.topic, m.partition)
         val off = acc.get(tp).map(o => Math.min(o, m.offset)).getOrElse(m.offset)
         acc + (tp -> off)
       }.foreach { case (tp, off) =>
           logInfo(s"poll(0) returned messages, seeking $tp to $off to compensate")
+        // 设置 topic的offset
           c.seek(tp, off)
       }
     }
@@ -186,15 +196,19 @@ private[spark] class DirectKafkaInputDStream[K, V](
   /**
    * Returns the latest (highest) available offsets, taking new partitions into account.
    */
+    // 获取最新的可用的partition对应的  offset
   protected def latestOffsets(): Map[TopicPartition, Long] = {
     val c = consumer
     paranoidPoll(c)
+      // 获取 Set<TopicPartition>
     val parts = c.assignment().asScala
 
     // make sure new partitions are reflected in currentOffsets
+      // 得到新加入的 partition
     val newPartitions = parts.diff(currentOffsets.keySet)
 
     // Check if there's any partition been revoked because of consumer rebalance.
+      // 得到移除的partition
     val revokedPartitions = currentOffsets.keySet.diff(parts)
     if (revokedPartitions.nonEmpty) {
       throw new IllegalStateException(s"Previously tracked partitions " +
@@ -208,6 +222,7 @@ private[spark] class DirectKafkaInputDStream[K, V](
     currentOffsets = currentOffsets ++ newPartitions.map(tp => tp -> c.position(tp)).toMap
 
     // find latest available offsets
+      // 把所有的topic设置到 最新位置
     c.seekToEnd(currentOffsets.keySet.asJava)
     parts.map(tp => tp -> c.position(tp)).toMap
   }
@@ -223,19 +238,25 @@ private[spark] class DirectKafkaInputDStream[K, V](
       }
     }.getOrElse(offsets)
   }
-
+  // 此就是 rdd的计算了
   override def compute(validTime: Time): Option[KafkaRDD[K, V]] = {
+    // 此是得到了每个partition 可以拉取的最大数量
     val untilOffsets = clamp(latestOffsets())
+    // 此创建了一个 OffsetRange,其中包含了要拉取的partition的 start end区间
     val offsetRanges = untilOffsets.map { case (tp, uo) =>
       val fo = currentOffsets(tp)
       OffsetRange(tp.topic, tp.partition, fo, uo)
     }
+    // 是否使用 consumerCache
     val useConsumerCache = context.conf.getBoolean("spark.streaming.kafka.consumer.cache.enabled",
       true)
+    // 创建了一个KafkaRDD
     val rdd = new KafkaRDD[K, V](context.sparkContext, executorKafkaParams, offsetRanges.toArray,
       getPreferredHosts, useConsumerCache)
 
     // Report the record number and metadata of this batch interval to InputInfoTracker.
+    // 1.过滤掉那些 offsetRanges是空的
+    // 2.然后创建了一个字符串,其中包含了要消费的一些信息
     val description = offsetRanges.filter { offsetRange =>
       // Don't display empty ranges.
       offsetRange.fromOffset != offsetRange.untilOffset
@@ -259,6 +280,7 @@ private[spark] class DirectKafkaInputDStream[K, V](
     val c = consumer
     paranoidPoll(c)
     if (currentOffsets.isEmpty) {
+      // 记录最先的 topic中partition中对应的offset
       currentOffsets = c.assignment().asScala.map { tp =>
         tp -> c.position(tp)
       }.toMap
@@ -270,7 +292,7 @@ private[spark] class DirectKafkaInputDStream[K, V](
       kc.close()
     }
   }
-
+  // 存储要提交的数据
   protected val commitQueue = new ConcurrentLinkedQueue[OffsetRange]
   protected val commitCallback = new AtomicReference[OffsetCommitCallback]
 
@@ -278,6 +300,7 @@ private[spark] class DirectKafkaInputDStream[K, V](
    * Queue up offset ranges for commit to Kafka at a future time.  Threadsafe.
    * @param offsetRanges The maximum untilOffset for a given partition will be used at commit.
    */
+    // 提交操作
   def commitAsync(offsetRanges: Array[OffsetRange]): Unit = {
     commitAsync(offsetRanges, null)
   }

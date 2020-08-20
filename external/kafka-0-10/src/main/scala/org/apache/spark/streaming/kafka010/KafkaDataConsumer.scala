@@ -32,6 +32,7 @@ private[kafka010] sealed trait KafkaDataConsumer[K, V] {
    * @param offset         the offset to fetch.
    * @param pollTimeoutMs  timeout in milliseconds to poll data from Kafka.
    */
+    // 拉取数据
   def get(offset: Long, pollTimeoutMs: Long): ConsumerRecord[K, V] = {
     internalConsumer.get(offset, pollTimeoutMs)
   }
@@ -86,7 +87,7 @@ private[kafka010] class InternalKafkaConsumer[K, V](
 
   private[kafka010] val groupId = kafkaParams.get(ConsumerConfig.GROUP_ID_CONFIG)
     .asInstanceOf[String]
-
+  // 创建 consumer
   private val consumer = createConsumer
 
   /** indicates whether this consumer is in use or not */
@@ -97,7 +98,9 @@ private[kafka010] class InternalKafkaConsumer[K, V](
 
   // TODO if the buffer was kept around as a random-access structure,
   // could possibly optimize re-calculating of an RDD in the same batch
+  // buffer中用于存储
   @volatile private var buffer = ju.Collections.emptyListIterator[ConsumerRecord[K, V]]()
+  // 下一个要拉取的 消息的offset
   @volatile private var nextOffset = InternalKafkaConsumer.UNKNOWN_OFFSET
 
   override def toString: String = {
@@ -121,36 +124,45 @@ private[kafka010] class InternalKafkaConsumer[K, V](
    * Get the record for the given offset, waiting up to timeout ms if IO is necessary.
    * Sequential forward access will use buffers, but random access will be horribly inefficient.
    */
+    // 拉取数据
   def get(offset: Long, timeout: Long): ConsumerRecord[K, V] = {
     logDebug(s"Get $groupId $topicPartition nextOffset $nextOffset requested $offset")
+      // offset 和 nextOffset不等
     if (offset != nextOffset) {
       logInfo(s"Initial fetch for $groupId $topicPartition $offset")
+      // 则设置 partition的offset
       seek(offset)
+      // 从此partition拉取数据
       poll(timeout)
     }
-
+    // 如果buffer中没有数据,则再拉取一次
     if (!buffer.hasNext()) {
       poll(timeout)
     }
     require(buffer.hasNext(),
       s"Failed to get records for $groupId $topicPartition $offset after polling for $timeout")
+      // 获取到拉取的数据
     var record = buffer.next()
-
+    // 如果获取到的数据的offset 和 指定的offset 不相等,则重新进行数据的拉取
     if (record.offset != offset) {
       logInfo(s"Buffer miss for $groupId $topicPartition $offset")
+      // 重置offset
       seek(offset)
+      // 数据拉取
       poll(timeout)
       require(buffer.hasNext(),
         s"Failed to get records for $groupId $topicPartition $offset after polling for $timeout")
       record = buffer.next()
+      // 在进行对比
       require(record.offset == offset,
         s"Got wrong record for $groupId $topicPartition even after seeking to offset $offset " +
           s"got offset ${record.offset} instead. If this is a compacted topic, consider enabling " +
           "spark.streaming.kafka.allowNonConsecutiveOffsets"
       )
     }
-
+    // 把下次要拉取的数据 offset 增加
     nextOffset = offset + 1
+      // 返回拉取的数据
     record
   }
 
@@ -197,9 +209,12 @@ private[kafka010] class InternalKafkaConsumer[K, V](
   }
 
   private def poll(timeout: Long): Unit = {
+    // 真正获取数据的地方
     val p = consumer.poll(timeout)
+    // 从获取到的数据中, 得到 topicPartition 对应的数据
     val r = p.records(topicPartition)
     logDebug(s"Polled ${p.partitions()}  ${r.size}")
+    // 把数据添加到buffer中
     buffer = r.listIterator
   }
 
@@ -280,8 +295,11 @@ private[kafka010] object KafkaDataConsumer extends Logging {
       kafkaParams: ju.Map[String, Object],
       context: TaskContext,
       useCache: Boolean): KafkaDataConsumer[K, V] = synchronized {
+    // 获取groupId
     val groupId = kafkaParams.get(ConsumerConfig.GROUP_ID_CONFIG).asInstanceOf[String]
+    // 使用 groupId 和 topicPartition 最为缓存的key
     val key = new CacheKey(groupId, topicPartition)
+    // 是否已经缓存了
     val existingInternalConsumer = cache.get(key)
 
     lazy val newInternalConsumer = new InternalKafkaConsumer[K, V](topicPartition, kafkaParams)
@@ -293,12 +311,17 @@ private[kafka010] object KafkaDataConsumer extends Logging {
       logDebug(s"Reattempt detected, invalidating cached consumer $existingInternalConsumer")
       if (existingInternalConsumer != null) {
         // Consumer exists in cache. If its in use, mark it for closing later, or close it now.
+        // 已经存在缓存,且正在使用
         if (existingInternalConsumer.inUse) {
+          // 则标记为 markedForClose 为true
           existingInternalConsumer.markedForClose = true
         } else {
+          // 如果缓存的不是正在使用了
+          // 则关闭
           existingInternalConsumer.close()
           // Remove the consumer from cache only if it's closed.
           // Marked for close consumers will be removed in release function.
+          // 并从缓存中删除
           cache.remove(key)
         }
       }

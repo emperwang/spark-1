@@ -81,7 +81,10 @@ class StreamingContext private[streaming] (
    * @param conf a org.apache.spark.SparkConf object specifying Spark parameters
    * @param batchDuration the time interval at which streaming data will be divided into batches
    */
+    // 创建 StreamingContext
+    // 先调用 StreamingContext.createNewSparkContext 创建了 sparkContext
   def this(conf: SparkConf, batchDuration: Duration) = {
+      // 创建了一个sparkContext, 设置checkpoint为null,记录了一下 batchDuration
     this(StreamingContext.createNewSparkContext(conf), null, batchDuration)
   }
 
@@ -131,9 +134,9 @@ class StreamingContext private[streaming] (
 
   require(_sc != null || _cp != null,
     "Spark Streaming cannot be initialized with both SparkContext and checkpoint as null")
-
+  // 是否设置了  checkpoint dir
   private[streaming] val isCheckpointPresent: Boolean = _cp != null
-
+  // sparkContext
   private[streaming] val sc: SparkContext = {
     if (_sc != null) {
       _sc
@@ -148,11 +151,11 @@ class StreamingContext private[streaming] (
     logWarning("spark.master should be set as local[n], n > 1 in local mode if you have receivers" +
       " to get data, otherwise Spark jobs will not get resources to process the received data.")
   }
-
+  // sparkConf配置
   private[streaming] val conf = sc.conf
-
+  // env
   private[streaming] val env = sc.env
-
+  // graph
   private[streaming] val graph: DStreamGraph = {
     if (isCheckpointPresent) {
       _cp.graph.setContext(this)
@@ -160,12 +163,14 @@ class StreamingContext private[streaming] (
       _cp.graph
     } else {
       require(_batchDur != null, "Batch duration for StreamingContext cannot be null")
+      // 创建了一个新的  DStreamGraph
       val newGraph = new DStreamGraph()
+      // 设置了 batch的时间
       newGraph.setBatchDuration(_batchDur)
       newGraph
     }
   }
-
+  // inputStream 的id生成器
   private val nextInputStreamId = new AtomicInteger(0)
 
   private[streaming] var checkpointDir: String = {
@@ -180,7 +185,7 @@ class StreamingContext private[streaming] (
   private[streaming] val checkpointDuration: Duration = {
     if (isCheckpointPresent) _cp.checkpointDuration else graph.batchDuration
   }
-
+  // job 调度器
   private[streaming] val scheduler = new JobScheduler(this)
 
   private[streaming] val waiter = new ContextWaiter
@@ -194,18 +199,20 @@ class StreamingContext private[streaming] (
     }
 
   /* Initializing a streamingSource to register metrics */
+  // streamingSource
   private val streamingSource = new StreamingSource(this)
-
+  // 当前的状态
   private var state: StreamingContextState = INITIALIZED
 
   private val startSite = new AtomicReference[CallSite](null)
 
   // Copy of thread-local properties from SparkContext. These properties will be set in all tasks
   // submitted by this StreamingContext after start.
+  // 保存从 sparkContext中获取的 threadLocal 配置,用于设置到所有的task中使用
   private[streaming] val savedProperties = new AtomicReference[Properties](new Properties)
-
+  //
   private[streaming] def getStartSite(): CallSite = startSite.get()
-
+  // 关闭的回调函数
   private var shutdownHookRef: AnyRef = _
 
   conf.getOption("spark.streaming.checkpoint.directory").foreach(checkpoint)
@@ -853,7 +860,7 @@ object StreamingContext extends Logging {
    * their JARs to StreamingContext.
    */
   def jarOfClass(cls: Class[_]): Option[String] = SparkContext.jarOfClass(cls)
-
+  // 创建 sparkContext
   private[streaming] def createNewSparkContext(conf: SparkConf): SparkContext = {
     new SparkContext(conf)
   }

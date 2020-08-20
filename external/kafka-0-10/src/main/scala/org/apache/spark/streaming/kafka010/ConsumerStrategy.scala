@@ -79,10 +79,13 @@ private case class Subscribe[K, V](
   ) extends ConsumerStrategy[K, V] with Logging {
 
   def executorKafkaParams: ju.Map[String, Object] = kafkaParams
-
+  // 策略开始执行
   def onStart(currentOffsets: ju.Map[TopicPartition, jl.Long]): Consumer[K, V] = {
+    // 创建consumer
     val consumer = new KafkaConsumer[K, V](kafkaParams)
+    // 订阅主题
     consumer.subscribe(topics)
+    // 要设置的 offset信息
     val toSeek = if (currentOffsets.isEmpty) {
       offsets
     } else {
@@ -97,16 +100,19 @@ private case class Subscribe[K, V](
       val shouldSuppress =
         aor != null && aor.asInstanceOf[String].toUpperCase(Locale.ROOT) == "NONE"
       try {
+        // 消费消息
         consumer.poll(0)
       } catch {
         case x: NoOffsetForPartitionException if shouldSuppress =>
           logWarning("Catching NoOffsetForPartitionException since " +
             ConsumerConfig.AUTO_OFFSET_RESET_CONFIG + " is none.  See KAFKA-3370")
       }
+      // 设置topic的offset地址
       toSeek.asScala.foreach { case (topicPartition, offset) =>
           consumer.seek(topicPartition, offset)
       }
       // we've called poll, we must pause or next poll may consume messages and set position
+      // 先暂停消费
       consumer.pause(consumer.assignment())
     }
 

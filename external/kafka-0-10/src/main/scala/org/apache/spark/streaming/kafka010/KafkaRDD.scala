@@ -52,26 +52,31 @@ private[spark] class KafkaRDD[K, V](
     val preferredHosts: ju.Map[TopicPartition, String],
     useConsumerCache: Boolean
 ) extends RDD[ConsumerRecord[K, V]](sc, Nil) with Logging with HasOffsetRanges {
-
+  // auto.offset.reset 是否自动reset
   require("none" ==
     kafkaParams.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).asInstanceOf[String],
     ConsumerConfig.AUTO_OFFSET_RESET_CONFIG +
       " must be set to none for executor kafka params, else messages may not match offsetRange")
-
+  // 是否自动提交额配置 enable.auto.commit
   require(false ==
     kafkaParams.get(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG).asInstanceOf[Boolean],
     ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG +
       " must be set to false for executor kafka params, else offsets may commit before processing")
 
   // TODO is it necessary to have separate configs for initial poll time vs ongoing poll time?
+  // consumer poll 的超时时间
   private val pollTimeout = conf.getLong("spark.streaming.kafka.consumer.poll.ms",
     conf.getTimeAsSeconds("spark.network.timeout", "120s") * 1000L)
+  // 缓存的初始大小
   private val cacheInitialCapacity =
     conf.getInt("spark.streaming.kafka.consumer.cache.initialCapacity", 16)
+  // 缓存的最大 容量
   private val cacheMaxCapacity =
     conf.getInt("spark.streaming.kafka.consumer.cache.maxCapacity", 64)
+  // 缓存的 factor
   private val cacheLoadFactor =
     conf.getDouble("spark.streaming.kafka.consumer.cache.loadFactor", 0.75).toFloat
+  // 是否允许不连续的 offset
   private val compacted =
     conf.getBoolean("spark.streaming.kafka.allowNonConsecutiveOffsets", false)
 
@@ -184,8 +189,9 @@ private[spark] class KafkaRDD[K, V](
     s"Beginning offset ${part.fromOffset} is after the ending offset ${part.untilOffset} " +
       s"for topic ${part.topic} partition ${part.partition}. " +
       "You either provided an invalid fromOffset, or the Kafka topic has been damaged"
-
+  // 开始计算
   override def compute(thePart: Partition, context: TaskContext): Iterator[ConsumerRecord[K, V]] = {
+    // 转换为 KafkaRDDPartition
     val part = thePart.asInstanceOf[KafkaRDDPartition]
     require(part.fromOffset <= part.untilOffset, errBeginAfterEnd(part))
     if (part.fromOffset == part.untilOffset) {
@@ -243,7 +249,7 @@ private class KafkaRDDIterator[K, V](
     KafkaDataConsumer.init(cacheInitialCapacity, cacheMaxCapacity, cacheLoadFactor)
     KafkaDataConsumer.acquire[K, V](part.topicPartition(), kafkaParams, context, useConsumerCache)
   }
-
+  // 获取开始 offset
   var requestOffset = part.fromOffset
 
   def closeIfNeeded(): Unit = {
@@ -251,15 +257,18 @@ private class KafkaRDDIterator[K, V](
       consumer.release()
     }
   }
-
+  // 是否换有下一个,也就是开始的offset 小于 endoffset
   override def hasNext(): Boolean = requestOffset < part.untilOffset
-
+  // 获取下一次数据
   override def next(): ConsumerRecord[K, V] = {
     if (!hasNext) {
       throw new ju.NoSuchElementException("Can't call getNext() once untilOffset has been reached")
     }
+    // 获取下一条数据
     val r = consumer.get(requestOffset, pollTimeout)
+    // startOffset 加1
     requestOffset += 1
+    // 返回拉取到的数据
     r
   }
 }
