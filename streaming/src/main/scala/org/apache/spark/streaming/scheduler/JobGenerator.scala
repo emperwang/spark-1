@@ -44,7 +44,7 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
   private val ssc = jobScheduler.ssc
   private val conf = ssc.conf
   private val graph = ssc.graph
-
+  // clock 用于生成任务时，时间的比较
   val clock = {
     val clockClass = ssc.sc.conf.get(
       "spark.streaming.clock", "org.apache.spark.util.SystemClock")
@@ -56,7 +56,9 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
         Utils.classForName(newClockClass).newInstance().asInstanceOf[Clock]
     }
   }
-
+  // 此是一个后台线程,每间隔一个batch 的时间就发送 GenerateJobs来生成一个job
+  // 这也是steaming 按照batch 时间来提交任务的原理
+  // 此是一个后天持续运行的任务,其在每个batch 间 会sleep
   private val timer = new RecurringTimer(clock, ssc.graph.batchDuration.milliseconds,
     longTime => eventLoop.post(GenerateJobs(new Time(longTime))), "JobGenerator")
 
@@ -78,13 +80,14 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
   private var lastProcessedBatch: Time = null
 
   /** Start generation of jobs */
+    // 开始 生成任务
   def start(): Unit = synchronized {
     if (eventLoop != null) return // generator has already been started
 
     // Call checkpointWriter here to initialize it before eventLoop uses it to avoid a deadlock.
     // See SPARK-10125
     checkpointWriter
-
+    // 创建事件接收线程
     eventLoop = new EventLoop[JobGeneratorEvent]("JobGenerator") {
       override protected def onReceive(event: JobGeneratorEvent): Unit = processEvent(event)
 
@@ -180,10 +183,13 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
   private def processEvent(event: JobGeneratorEvent) {
     logDebug("Got event " + event)
     event match {
+        // 生成job
       case GenerateJobs(time) => generateJobs(time)
       case ClearMetadata(time) => clearMetadata(time)
+        // checkpoint 操作
       case DoCheckpoint(time, clearCheckpointDataLater) =>
         doCheckpoint(time, clearCheckpointDataLater)
+        // 清除checkPoint操作
       case ClearCheckpointData(time) => clearCheckpointData(time)
     }
   }
@@ -240,6 +246,7 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
   }
 
   /** Generate jobs and perform checkpointing for the given `time`.  */
+    // 生成job
   private def generateJobs(time: Time) {
     // Checkpoint all RDDs marked for checkpointing to ensure their lineages are
     // truncated periodically. Otherwise, we may run into stack overflows (SPARK-6847).
@@ -251,7 +258,9 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
       graph.generateJobs(time) // generate jobs using allocated block
     } match {
       case Success(jobs) =>
+        // 记录这些job的 信息
         val streamIdToInputInfos = jobScheduler.inputInfoTracker.getInfo(time)
+        // 成功生成了job, 则提交job
         jobScheduler.submitJobSet(JobSet(time, jobs, streamIdToInputInfos))
       case Failure(e) =>
         jobScheduler.reportError("Error generating jobs for time " + time, e)
@@ -292,7 +301,9 @@ class JobGenerator(jobScheduler: JobScheduler) extends Logging {
   }
 
   /** Perform checkpoint for the given `time`. */
+    // checkpoint 即 输出到磁盘一份
   private def doCheckpoint(time: Time, clearCheckpointDataLater: Boolean) {
+      // 需要输出到磁盘 且 是 checkpointDuration的整数倍
     if (shouldCheckpoint && (time - graph.zeroTime).isMultipleOf(ssc.checkpointDuration)) {
       logInfo("Checkpointing graph for time " + time)
       ssc.graph.updateCheckpointData(time)

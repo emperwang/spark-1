@@ -143,23 +143,35 @@ private[spark] class DirectKafkaInputDStream[K, V](
     // calculate a per-partition rate limit based on current lag
     val effectiveRateLimitPerPartition = estimatedRateLimit.filter(_ > 0) match {
       case Some(rate) =>
+        //  first_set_____________other message______________________latest
+        // 此时计算 没有消费过的消息,即lag
         val lagPerPartition = offsets.map { case (tp, offset) =>
           tp -> Math.max(offset - currentOffsets(tp), 0)
         }
+        // 总共的lag,各个分区的相加
         val totalLag = lagPerPartition.values.sum
 
         lagPerPartition.map { case (tp, lag) =>
+          // 得到每个分区最大的值
           val maxRateLimitPerPartition = ppc.maxRatePerPartition(tp)
+          // 计算每个分区的速率
           val backpressureRate = lag / totalLag.toDouble * rate
+          // 如果maxRateLimitPerPartition 存在,取 maxRateLimitPerPartition和backpressureRate中比较小的
+          // 如果不存在,则使用backpressureRate
           tp -> (if (maxRateLimitPerPartition > 0) {
             Math.min(backpressureRate, maxRateLimitPerPartition)} else backpressureRate)
         }
+        // 没有合适的速率,则使用默认的速率 val maxRate = conf.getLong("spark.streaming.kafka.maxRatePerPartition", 0)
       case None => offsets.map { case (tp, offset) => tp -> ppc.maxRatePerPartition(tp).toDouble }
     }
 
     if (effectiveRateLimitPerPartition.values.sum > 0) {
+      // 每个批次是几秒
       val secsPerBatch = context.graph.batchDuration.milliseconds.toDouble / 1000
       Some(effectiveRateLimitPerPartition.map {
+            // 再次计算 每个分区的 最大速率
+            // 如果这里最大速率没有最小速率大,则使用最小速率minRate
+            // val minRate = conf.getLong("spark.streaming.kafka.minRatePerPartition", 1)
         case (tp, limit) => tp -> Math.max((secsPerBatch * limit).toLong,
           ppc.minRatePerPartition(tp))
       })
@@ -175,19 +187,26 @@ private[spark] class DirectKafkaInputDStream[K, V](
     // 此次主要是再次设置每一个topic的offset为最小的
   private def paranoidPoll(c: Consumer[K, V]): Unit = {
     // don't actually want to consume any messages, so pause all partitions
+      // 暂停消费所有的partition
     c.pause(c.assignment())
     // 消费消息
     val msgs = c.poll(0)
     if (!msgs.isEmpty) {
       // position should be minimum offset per topicpartition
       // 根据消费的消息,记录消息中对应的topic的partition的最下offset
+      // 这里的acc用于存储最后的结果,和foldLeft 算子有关
       msgs.asScala.foldLeft(Map[TopicPartition, Long]()) { (acc, m) =>
+        // 创建 TopicPartition
         val tp = new TopicPartition(m.topic, m.partition)
+        // 先去acc中获取,并 和消费到的 offset对比, 选小的
         val off = acc.get(tp).map(o => Math.min(o, m.offset)).getOrElse(m.offset)
+        // 最后记录到 acc中
         acc + (tp -> off)
+        // 下面的foreach 又是对acc的遍历
       }.foreach { case (tp, off) =>
           logInfo(s"poll(0) returned messages, seeking $tp to $off to compensate")
         // 设置 topic的offset
+        // 此处就是根据acc 设置topic的offset
           c.seek(tp, off)
       }
     }
@@ -197,6 +216,7 @@ private[spark] class DirectKafkaInputDStream[K, V](
    * Returns the latest (highest) available offsets, taking new partitions into account.
    */
     // 获取最新的可用的partition对应的  offset
+    // 感知动态的 分区信息
   protected def latestOffsets(): Map[TopicPartition, Long] = {
     val c = consumer
     paranoidPoll(c)
@@ -230,10 +250,13 @@ private[spark] class DirectKafkaInputDStream[K, V](
   // limits the maximum number of messages per partition
   protected def clamp(
     offsets: Map[TopicPartition, Long]): Map[TopicPartition, Long] = {
-
+    // 限制每个分区的最大消息数
     maxMessagesPerPartition(offsets).map { mmp =>
       mmp.map { case (tp, messages) =>
+        // uo 在这里是最新的offset
           val uo = offsets(tp)
+        // currentOffsets(tp) 是设置的offset(如果有的话)
+        // currentOffsets(tp) + messages 就是一个endOffset,也就是根据速率算出来的最终此次任务可以消费到的位置
           tp -> Math.min(currentOffsets(tp) + messages, uo)
       }
     }.getOrElse(offsets)
@@ -244,7 +267,9 @@ private[spark] class DirectKafkaInputDStream[K, V](
     val untilOffsets = clamp(latestOffsets())
     // 此创建了一个 OffsetRange,其中包含了要拉取的partition的 start end区间
     val offsetRanges = untilOffsets.map { case (tp, uo) =>
+      // 获取offset的开始位置
       val fo = currentOffsets(tp)
+      // uo 是offset的结束位置
       OffsetRange(tp.topic, tp.partition, fo, uo)
     }
     // 是否使用 consumerCache
@@ -269,15 +294,18 @@ private[spark] class DirectKafkaInputDStream[K, V](
       "offsets" -> offsetRanges.toList,
       StreamInputInfo.METADATA_KEY_DESCRIPTION -> description)
     val inputInfo = StreamInputInfo(id, rdd.count, metadata)
+    // 把inputInfo注册 inputInfoTracker
     ssc.scheduler.inputInfoTracker.reportInfo(validTime, inputInfo)
 
     currentOffsets = untilOffsets
     commitAll()
     Some(rdd)
   }
-
+  // 开始
   override def start(): Unit = {
+    // 创建consumer
     val c = consumer
+    // 设置各个partition的offset为最小
     paranoidPoll(c)
     if (currentOffsets.isEmpty) {
       // 记录最先的 topic中partition中对应的offset
@@ -301,6 +329,7 @@ private[spark] class DirectKafkaInputDStream[K, V](
    * @param offsetRanges The maximum untilOffset for a given partition will be used at commit.
    */
     // 提交操作
+    // 这里的offset提交,其实就是把offset添加到了队列中
   def commitAsync(offsetRanges: Array[OffsetRange]): Unit = {
     commitAsync(offsetRanges, null)
   }
@@ -314,17 +343,25 @@ private[spark] class DirectKafkaInputDStream[K, V](
     commitCallback.set(callback)
     commitQueue.addAll(ju.Arrays.asList(offsetRanges: _*))
   }
-
+  // 真正提交 offset的地方
   protected def commitAll(): Unit = {
+    // 创建一个容器,用于保存要提交的offset
     val m = new ju.HashMap[TopicPartition, OffsetAndMetadata]()
+    // 从队列中获取offset
     var osr = commitQueue.poll()
     while (null != osr) {
       val tp = osr.topicPartition
       val x = m.get(tp)
+      // 如果m中没有,则使用 osr.untilOffset
+      // 如果m中已经存在了,则使用一个 值大的一个
       val offset = if (null == x) { osr.untilOffset } else { Math.max(x.offset, osr.untilOffset) }
+      // 保存起来
       m.put(tp, new OffsetAndMetadata(offset))
+      // 继续获取
       osr = commitQueue.poll()
     }
+    // 如果存在offset呢
+    // 那就进行提交了
     if (!m.isEmpty) {
       consumer.commitAsync(m, commitCallback.get)
     }

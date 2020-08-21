@@ -103,9 +103,11 @@ private[streaming] case object GetAllReceiverInfo extends ReceiverTrackerLocalMe
  */
 private[streaming]
 class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false) extends Logging {
-
+  // 获取数据流
   private val receiverInputStreams = ssc.graph.getReceiverInputStreams()
+  // 输入流的  id
   private val receiverInputStreamIds = receiverInputStreams.map { _.id }
+  // receive 的block  信息记录
   private val receivedBlockTracker = new ReceivedBlockTracker(
     ssc.sparkContext.conf,
     ssc.sparkContext.hadoopConfiguration,
@@ -205,6 +207,7 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
 
   /** Allocate all unallocated blocks to the given batch. */
   def allocateBlocksToBatch(batchTime: Time): Unit = {
+    // 如果有输入流, 则根据batch时间 生成 block
     if (receiverInputStreams.nonEmpty) {
       receivedBlockTracker.allocateBlocksToBatch(batchTime)
     }
@@ -568,6 +571,7 @@ class ReceiverTracker(ssc: StreamingContext, skipReceiverLaunch: Boolean = false
     /**
      * Start a receiver along with its scheduled executors
      */
+      // 启动 receiver
     private def startReceiver(
         receiver: Receiver[_],
         scheduledLocations: Seq[TaskLocation]): Unit = {

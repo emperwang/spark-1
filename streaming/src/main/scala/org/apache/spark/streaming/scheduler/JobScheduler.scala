@@ -48,11 +48,16 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
 
   // Use of ConcurrentHashMap.keySet later causes an odd runtime problem due to Java 7/8 diff
   // https://gist.github.com/AlainODea/1375759b8720a3f9f094
+  // 时间 和 job的一个对应关系
   private val jobSets: java.util.Map[Time, JobSet] = new ConcurrentHashMap[Time, JobSet]
+  // 并发任务数量
   private val numConcurrentJobs = ssc.conf.getInt("spark.streaming.concurrentJobs", 1)
+  // job  线程池
   private val jobExecutor =
     ThreadUtils.newDaemonFixedThreadPool(numConcurrentJobs, "streaming-job-executor")
+  // 生成job的 生成器
   private val jobGenerator = new JobGenerator(this)
+  // 时间比较
   val clock = jobGenerator.clock
   val listenerBus = new StreamingListenerBus(ssc.sparkContext.listenerBus)
 
@@ -63,13 +68,14 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
   var inputInfoTracker: InputInfoTracker = null
 
   private var executorAllocationManager: Option[ExecutorAllocationManager] = None
-
+  // 事件处理器
   private var eventLoop: EventLoop[JobSchedulerEvent] = null
-
+  // 任务调度器开始
   def start(): Unit = synchronized {
     if (eventLoop != null) return // scheduler has already been started
 
     logDebug("Starting JobScheduler")
+    // 创建事件处理器  并开始运行
     eventLoop = new EventLoop[JobSchedulerEvent]("JobScheduler") {
       override protected def onReceive(event: JobSchedulerEvent): Unit = processEvent(event)
 
@@ -82,11 +88,13 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
       inputDStream <- ssc.graph.getInputStreams
       rateController <- inputDStream.rateController
     } ssc.addStreamingListener(rateController)
-
+    // 监听总线 开始
     listenerBus.start()
+    // 创建receiveerTracter
     receiverTracker = new ReceiverTracker(ssc)
+    // 创建 inputInfotracter
     inputInfoTracker = new InputInfoTracker(ssc)
-
+  //
     val executorAllocClient: ExecutorAllocationClient = ssc.sparkContext.schedulerBackend match {
       case b: ExecutorAllocationClient => b.asInstanceOf[ExecutorAllocationClient]
       case _ => null
@@ -99,7 +107,10 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
       ssc.graph.batchDuration.milliseconds,
       clock)
     executorAllocationManager.foreach(ssc.addStreamingListener)
+    // receiverTracter 开始
+    // 此是和 socket 监听 file监听配合使用的
     receiverTracker.start()
+    // 任务生成器 开始
     jobGenerator.start()
     executorAllocationManager.foreach(_.start())
     logInfo("Started JobScheduler")
@@ -143,13 +154,14 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
     eventLoop = null
     logInfo("Stopped JobScheduler")
   }
-
+  // 对job进行处理
   def submitJobSet(jobSet: JobSet) {
     if (jobSet.jobs.isEmpty) {
       logInfo("No jobs added for time " + jobSet.time)
     } else {
       listenerBus.post(StreamingListenerBatchSubmitted(jobSet.toBatchInfo))
       jobSets.put(jobSet.time, jobSet)
+      // 把每一个job到提交到线程池中进行处理
       jobSet.jobs.foreach(job => jobExecutor.execute(new JobHandler(job)))
       logInfo("Added jobs for time " + jobSet.time)
     }
@@ -189,6 +201,7 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
       // correct "jobSet.processingStartTime".
       listenerBus.post(StreamingListenerBatchStarted(jobSet.toBatchInfo))
     }
+    // 设置job开始时间
     job.setStartTime(startTime)
     listenerBus.post(StreamingListenerOutputOperationStarted(job.toOutputOperationInfo))
     logInfo("Starting job " + job.id + " from job set of time " + jobSet.time)
@@ -249,15 +262,18 @@ class JobScheduler(val ssc: StreamingContext) extends Logging {
         // it's possible that when `post` is called, `eventLoop` happens to null.
         var _eventLoop = eventLoop
         if (_eventLoop != null) {
+          // 发送消息 JobStarted
           _eventLoop.post(JobStarted(job, clock.getTimeMillis()))
           // Disable checks for existing output directories in jobs launched by the streaming
           // scheduler, since we may need to write output to an existing directory during checkpoint
           // recovery; see SPARK-4835 for more details.
+          // 执行job 的具体任务,即action操作,如 foreach  print
           SparkHadoopWriterUtils.disableOutputSpecValidation.withValue(true) {
             job.run()
           }
           _eventLoop = eventLoop
           if (_eventLoop != null) {
+            // 发送 JobCompleted 消息
             _eventLoop.post(JobCompleted(job, clock.getTimeMillis()))
           }
         } else {

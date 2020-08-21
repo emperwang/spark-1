@@ -111,6 +111,7 @@ private[kafka010] class InternalKafkaConsumer[K, V](
   }
 
   /** Create a KafkaConsumer to fetch records for `topicPartition` */
+    // 创建 consumer
   private def createConsumer: KafkaConsumer[K, V] = {
     val c = new KafkaConsumer[K, V](kafkaParams)
     val topics = ju.Arrays.asList(topicPartition)
@@ -125,6 +126,8 @@ private[kafka010] class InternalKafkaConsumer[K, V](
    * Sequential forward access will use buffers, but random access will be horribly inefficient.
    */
     // 拉取数据
+    // 拉取数据时是批量拉取,拉取完成后放入到buffer中
+    // 返回给用户使用时,是从buffer中一条一条的获取
   def get(offset: Long, timeout: Long): ConsumerRecord[K, V] = {
     logDebug(s"Get $groupId $topicPartition nextOffset $nextOffset requested $offset")
       // offset 和 nextOffset不等
@@ -133,6 +136,7 @@ private[kafka010] class InternalKafkaConsumer[K, V](
       // 则设置 partition的offset
       seek(offset)
       // 从此partition拉取数据
+      // 并把数据放入到 buffer中
       poll(timeout)
     }
     // 如果buffer中没有数据,则再拉取一次
@@ -205,6 +209,7 @@ private[kafka010] class InternalKafkaConsumer[K, V](
 
   private def seek(offset: Long): Unit = {
     logDebug(s"Seeking to $topicPartition $offset")
+    // 设置 partiotion 的offset
     consumer.seek(topicPartition, offset)
   }
 
@@ -223,13 +228,13 @@ private[kafka010] class InternalKafkaConsumer[K, V](
 private[kafka010] case class CacheKey(groupId: String, topicPartition: TopicPartition)
 
 private[kafka010] object KafkaDataConsumer extends Logging {
-
+  // 缓存的kafka 会有多个consumer实例可以使用
   private case class CachedKafkaDataConsumer[K, V](internalConsumer: InternalKafkaConsumer[K, V])
     extends KafkaDataConsumer[K, V] {
     assert(internalConsumer.inUse)
     override def release(): Unit = KafkaDataConsumer.release(internalConsumer)
   }
-
+  // 不缓存的情况下,每次使用后都关闭
   private case class NonCachedKafkaDataConsumer[K, V](internalConsumer: InternalKafkaConsumer[K, V])
     extends KafkaDataConsumer[K, V] {
     override def release(): Unit = internalConsumer.close()
@@ -248,6 +253,7 @@ private[kafka010] object KafkaDataConsumer extends Logging {
       loadFactor: Float): Unit = synchronized {
     if (null == cache) {
       logInfo(s"Initializing cache $initialCapacity $maxCapacity $loadFactor")
+      // 为缓存创建 容器
       cache = new ju.LinkedHashMap[CacheKey, InternalKafkaConsumer[_, _]](
         initialCapacity, loadFactor, true) {
         override def removeEldestEntry(
@@ -301,7 +307,8 @@ private[kafka010] object KafkaDataConsumer extends Logging {
     val key = new CacheKey(groupId, topicPartition)
     // 是否已经缓存了
     val existingInternalConsumer = cache.get(key)
-
+    // lazy 懒加载
+    // 创建了一个 executor端使用的 InternalKafkaConsumer
     lazy val newInternalConsumer = new InternalKafkaConsumer[K, V](topicPartition, kafkaParams)
 
     if (context != null && context.attemptNumber >= 1) {
@@ -325,10 +332,11 @@ private[kafka010] object KafkaDataConsumer extends Logging {
           cache.remove(key)
         }
       }
-
+     //
       logDebug("Reattempt detected, new non-cached consumer will be allocated " +
         s"$newInternalConsumer")
       NonCachedKafkaDataConsumer(newInternalConsumer)
+      // 如果不适用cache,则创建不是cache的consumer
     } else if (!useCache) {
       // If consumer reuse turned off, then do not use it, return a new consumer
       logDebug("Cache usage turned off, new non-cached consumer will be allocated " +
@@ -353,17 +361,21 @@ private[kafka010] object KafkaDataConsumer extends Logging {
       CachedKafkaDataConsumer(existingInternalConsumer.asInstanceOf[InternalKafkaConsumer[K, V]])
     }
   }
-
+  // 缓存consumer情况下的 释放
   private def release(internalConsumer: InternalKafkaConsumer[_, _]): Unit = synchronized {
     // Clear the consumer from the cache if this is indeed the consumer present in the cache
+    // 创建cache的key
     val key = new CacheKey(internalConsumer.groupId, internalConsumer.topicPartition)
+    // 获取缓存的 consumer
     val cachedInternalConsumer = cache.get(key)
     if (internalConsumer.eq(cachedInternalConsumer)) {
       // The released consumer is the same object as the cached one.
+      // 如果标记了要 close,则进行关闭,并从缓存中移除
       if (internalConsumer.markedForClose) {
         internalConsumer.close()
         cache.remove(key)
       } else {
+        // 否则只是标记 没有在使用
         internalConsumer.inUse = false
       }
     } else {

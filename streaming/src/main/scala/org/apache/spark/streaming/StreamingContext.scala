@@ -155,7 +155,7 @@ class StreamingContext private[streaming] (
   private[streaming] val conf = sc.conf
   // env
   private[streaming] val env = sc.env
-  // graph
+  // 创建 graph
   private[streaming] val graph: DStreamGraph = {
     if (isCheckpointPresent) {
       _cp.graph.setContext(this)
@@ -172,7 +172,7 @@ class StreamingContext private[streaming] (
   }
   // inputStream 的id生成器
   private val nextInputStreamId = new AtomicInteger(0)
-
+  // checkpoint 的目录
   private[streaming] var checkpointDir: String = {
     if (isCheckpointPresent) {
       sc.setCheckpointDir(_cp.checkpointDir)
@@ -181,15 +181,15 @@ class StreamingContext private[streaming] (
       null
     }
   }
-
+  // checkpoint的 duration
   private[streaming] val checkpointDuration: Duration = {
     if (isCheckpointPresent) _cp.checkpointDuration else graph.batchDuration
   }
   // job 调度器
   private[streaming] val scheduler = new JobScheduler(this)
-
+  // waiter 函数,一个等待结束的函数
   private[streaming] val waiter = new ContextWaiter
-
+  // 处理过程的监听器, 会更新提交的任务,完成的任务等信息
   private[streaming] val progressListener = new StreamingJobProgressListener(this)
 
   private[streaming] val uiTab: Option[StreamingTab] =
@@ -203,7 +203,7 @@ class StreamingContext private[streaming] (
   private val streamingSource = new StreamingSource(this)
   // 当前的状态
   private var state: StreamingContextState = INITIALIZED
-
+  // 创建DStream 的调用stack
   private val startSite = new AtomicReference[CallSite](null)
 
   // Copy of thread-local properties from SparkContext. These properties will be set in all tasks
@@ -229,6 +229,7 @@ class StreamingContext private[streaming] (
    * if the developer wishes to query old data outside the DStream computation).
    * @param duration Minimum duration that each DStream should remember its RDDs
    */
+    // 设置需要记住的 rdd 的时间
   def remember(duration: Duration) {
     graph.remember(duration)
   }
@@ -576,17 +577,19 @@ class StreamingContext private[streaming] (
   def start(): Unit = synchronized {
     state match {
       case INITIALIZED =>
+        // DStream.getCreationSite()  获取刚才创建DStream的 调用stack
         startSite.set(DStream.getCreationSite())
         StreamingContext.ACTIVATION_LOCK.synchronized {
           StreamingContext.assertNoOtherContextIsActive()
           try {
             validate()
-
+            // 注册 process 的监听器
             registerProgressListener()
 
             // Start the streaming scheduler in a new thread, so that thread local properties
             // like call sites and job groups can be reset without affecting those of the
             // current thread.
+            // 在一个新线程中运行任务调度
             ThreadUtils.runInNewThread("streaming-start") {
               sparkContext.setCallSite(startSite.get)
               sparkContext.clearJobGroup()
@@ -607,10 +610,12 @@ class StreamingContext private[streaming] (
           StreamingContext.setActiveContext(this)
         }
         logDebug("Adding shutdown hook") // force eager creation of logger
+        // 注册关闭回调函数
         shutdownHookRef = ShutdownHookManager.addShutdownHook(
           StreamingContext.SHUTDOWN_HOOK_PRIORITY)(() => stopOnShutdown())
         // Registering Streaming Metrics at the start of the StreamingContext
         assert(env.metricsSystem != null)
+        // 注册  监测信息
         env.metricsSystem.registerSource(streamingSource)
         uiTab.foreach(_.attach())
         logInfo("StreamingContext started")
@@ -730,6 +735,7 @@ class StreamingContext private[streaming] (
   }
 
   private def registerProgressListener(): Unit = {
+    // progressListener 记录任务的一些运行信息
     addStreamingListener(progressListener)
     sc.addSparkListener(progressListener)
     sc.ui.foreach(_.setStreamingJobProgressListener(progressListener))

@@ -202,11 +202,11 @@ object KafkaUtils extends Logging {
     // 发送给executor的 kafka参数
   private[kafka010] def fixKafkaParams(kafkaParams: ju.HashMap[String, Object]): Unit = {
     logWarning(s"overriding ${ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG} to false for executor")
-      // 设置不可以自动提交  enable.auto.commit=false
+      // 1.设置不可以自动提交  enable.auto.commit=false
     kafkaParams.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false: java.lang.Boolean)
 
     logWarning(s"overriding ${ConsumerConfig.AUTO_OFFSET_RESET_CONFIG} to none for executor")
-      // 设置 auto.offset.reset = none
+      // 2.设置 auto.offset.reset = none
     kafkaParams.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none")
 
     // driver and executor should be in different consumer groups
@@ -215,7 +215,7 @@ object KafkaUtils extends Logging {
     if (null == originalGroupId) {
       logError(s"${ConsumerConfig.GROUP_ID_CONFIG} is null, you should probably set it")
     }
-      // 设置新的groupid为 spark-executor- + originalGroupId
+      // 3.设置新的groupid为 spark-executor- + originalGroupId
     val groupId = "spark-executor-" + originalGroupId
     logWarning(s"overriding executor ${ConsumerConfig.GROUP_ID_CONFIG} to ${groupId}")
     kafkaParams.put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
@@ -224,7 +224,7 @@ object KafkaUtils extends Logging {
     val rbb = kafkaParams.get(ConsumerConfig.RECEIVE_BUFFER_CONFIG)
     if (null == rbb || rbb.asInstanceOf[java.lang.Integer] < 65536) {
       logWarning(s"overriding ${ConsumerConfig.RECEIVE_BUFFER_CONFIG} to 65536 see KAFKA-3135")
-      // 设置 receive.buffer.bytes = 65536
+      // 4.设置 receive.buffer.bytes = 65536
       kafkaParams.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, 65536: java.lang.Integer)
     }
   }

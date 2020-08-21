@@ -45,7 +45,7 @@ abstract class InputDStream[T: ClassTag](_ssc: StreamingContext)
   extends DStream[T](_ssc) {
 
   private[streaming] var lastValidTime: Time = null
-
+  // 这里把 InputDStream 也就是  DirectKafkaInputDStream 注册到了 graph中
   ssc.graph.addInputStream(this)
 
   /** This is a unique identifier for the input stream. */

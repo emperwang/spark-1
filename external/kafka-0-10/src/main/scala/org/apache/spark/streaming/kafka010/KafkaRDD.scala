@@ -232,6 +232,7 @@ private[spark] class KafkaRDD[K, V](
  * An iterator that fetches messages directly from Kafka for the offsets in partition.
  * Uses a cached consumer where possible to take advantage of prefetching
  */
+// 连续 iterator的操作
 private class KafkaRDDIterator[K, V](
   part: KafkaRDDPartition,
   context: TaskContext,
@@ -242,10 +243,11 @@ private class KafkaRDDIterator[K, V](
   cacheMaxCapacity: Int,
   cacheLoadFactor: Float
 ) extends Iterator[ConsumerRecord[K, V]] {
-
+  // 添加 监听器
   context.addTaskCompletionListener[Unit](_ => closeIfNeeded())
-
+  // 创建一个新的consumer
   val consumer = {
+    // 创建cache
     KafkaDataConsumer.init(cacheInitialCapacity, cacheMaxCapacity, cacheLoadFactor)
     KafkaDataConsumer.acquire[K, V](part.topicPartition(), kafkaParams, context, useConsumerCache)
   }

@@ -120,6 +120,7 @@ abstract class DStream[T: ClassTag] (
   def context: StreamingContext = ssc
 
   /* Set the creation call site */
+  // 获取 DStream 的创建 调用栈
   private[streaming] val creationSite = DStream.getCreationSite()
 
   /**
@@ -195,6 +196,7 @@ abstract class DStream[T: ClassTag] (
    * the validity of future times is calculated. This method also recursively initializes
    * its parent DStreams.
    */
+    // 初始化 DStream, 设置  zero time
   private[streaming] def initialize(time: Time) {
     if (zeroTime != null && zeroTime != time) {
       throw new SparkException(s"ZeroTime is already initialized to $zeroTime"

@@ -86,11 +86,14 @@ private case class Subscribe[K, V](
     // 订阅主题
     consumer.subscribe(topics)
     // 要设置的 offset信息
+    // 如果onStart函数 参数为空,则使用Subscribe 策略类的构造参数 offset
+    // 如果currentOffsets 则使用currentOffsets
     val toSeek = if (currentOffsets.isEmpty) {
       offsets
     } else {
       currentOffsets
     }
+    // 如果toSeek不为空,则说明存在要设置offset的 partition
     if (!toSeek.isEmpty) {
       // work around KAFKA-3370 when reset is none
       // poll will throw if no position, i.e. auto offset reset none and no explicit position
@@ -115,7 +118,7 @@ private case class Subscribe[K, V](
       // 先暂停消费
       consumer.pause(consumer.assignment())
     }
-
+    // 返回创建的 consumer
     consumer
   }
 }

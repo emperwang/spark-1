@@ -27,8 +27,9 @@ import org.apache.spark.streaming.scheduler.Job
 import org.apache.spark.util.Utils
 
 final private[streaming] class DStreamGraph extends Serializable with Logging {
-
+  /// 注册的输入流
   private val inputStreams = new ArrayBuffer[InputDStream[_]]()
+  // 注册的输出流
   private val outputStreams = new ArrayBuffer[DStream[_]]()
 
   @volatile private var inputStreamNameAndID: Seq[(String, Int)] = Nil
@@ -47,11 +48,16 @@ final private[streaming] class DStreamGraph extends Serializable with Logging {
       require(zeroTime == null, "DStream graph computation already started")
       zeroTime = time
       startTime = time
+      // 调用 各个 outputStream 的initialize 和 remember  validateAtStart 来设置 zeroTime
+      // rememberDuration   以及进行校验
       outputStreams.foreach(_.initialize(zeroTime))
       outputStreams.foreach(_.remember(rememberDuration))
       outputStreams.foreach(_.validateAtStart())
+      // 输入流的 个数
       numReceivers = inputStreams.count(_.isInstanceOf[ReceiverInputDStream[_]])
+      // 输入流的name 和 id
       inputStreamNameAndID = inputStreams.map(is => (is.name, is.id))
+      // 输入流 开始
       inputStreams.par.foreach(_.start())
     }
   }
@@ -87,7 +93,7 @@ final private[streaming] class DStreamGraph extends Serializable with Logging {
       rememberDuration = duration
     }
   }
-
+  // 注册 InputStream 当是kafka时是 DirectKafkaInputDStream,注册到此inputStreams
   def addInputStream(inputStream: InputDStream[_]) {
     this.synchronized {
       inputStream.setGraph(this)

@@ -23,9 +23,10 @@ import org.apache.spark.util.{Clock, SystemClock}
 private[streaming]
 class RecurringTimer(clock: Clock, period: Long, callback: (Long) => Unit, name: String)
   extends Logging {
-
+    // 此创建了一个 后台运行线程
   private val thread = new Thread("RecurringTimer - " + name) {
     setDaemon(true)
+    // 线程只是执行函数 loop
     override def run() { loop }
   }
 
@@ -88,11 +89,15 @@ class RecurringTimer(clock: Clock, period: Long, callback: (Long) => Unit, name:
     }
     prevTime
   }
-
+  // 等待一段时间,然后执行 传递的函数  callback
   private def triggerActionForNextInterval(): Unit = {
+    // 线程睡眠
     clock.waitTillTime(nextTime)
     callback(nextTime)
+    // 把此处执行时间记录为 前一个时间
     prevTime = nextTime
+    // 下一次执行的时间
+    // 此period 就是 一个 batch的时间
     nextTime += period
     logDebug("Callback for " + name + " called at time " + prevTime)
   }
@@ -100,8 +105,10 @@ class RecurringTimer(clock: Clock, period: Long, callback: (Long) => Unit, name:
   /**
    * Repeatedly call the callback every interval.
    */
+    // 重复执行,
   private def loop() {
     try {
+      // 重复执行,来触发 下一次 action
       while (!stopped) {
         triggerActionForNextInterval()
       }
