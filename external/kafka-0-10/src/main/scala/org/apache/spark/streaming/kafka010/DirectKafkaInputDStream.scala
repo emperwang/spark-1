@@ -125,6 +125,8 @@ private[spark] class DirectKafkaInputDStream[K, V](
    */
     // 速率控制器
   override protected[streaming] val rateController: Option[RateController] = {
+      //是否开启了 反压机制
+      // 即根据系统负载在决定 消费速率
     if (RateController.isBackPressureEnabled(ssc.conf)) {
       Some(new DirectKafkaRateController(id,
         RateEstimator.create(ssc.conf, context.graph.batchDuration)))
@@ -141,6 +143,7 @@ private[spark] class DirectKafkaInputDStream[K, V](
     }}
 
     // calculate a per-partition rate limit based on current lag
+    // 2. 根据当前的lag 使用获取到的速率 设置每一个分区的速率
     val effectiveRateLimitPerPartition = estimatedRateLimit.filter(_ > 0) match {
       case Some(rate) =>
         //  first_set_____________other message______________________latest
@@ -164,7 +167,7 @@ private[spark] class DirectKafkaInputDStream[K, V](
         // 没有合适的速率,则使用默认的速率 val maxRate = conf.getLong("spark.streaming.kafka.maxRatePerPartition", 0)
       case None => offsets.map { case (tp, offset) => tp -> ppc.maxRatePerPartition(tp).toDouble }
     }
-
+    // 3. 最终设置,防止没有设置
     if (effectiveRateLimitPerPartition.values.sum > 0) {
       // 每个批次是几秒
       val secsPerBatch = context.graph.batchDuration.milliseconds.toDouble / 1000
@@ -193,7 +196,7 @@ private[spark] class DirectKafkaInputDStream[K, V](
     val msgs = c.poll(0)
     if (!msgs.isEmpty) {
       // position should be minimum offset per topicpartition
-      // 根据消费的消息,记录消息中对应的topic的partition的最下offset
+      // 根据消费的消息,记录消息中对应的topic的partition的最小offset
       // 这里的acc用于存储最后的结果,和foldLeft 算子有关
       msgs.asScala.foldLeft(Map[TopicPartition, Long]()) { (acc, m) =>
         // 创建 TopicPartition

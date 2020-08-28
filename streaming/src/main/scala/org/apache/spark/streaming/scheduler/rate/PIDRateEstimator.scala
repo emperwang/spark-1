@@ -46,16 +46,19 @@ import org.apache.spark.internal.Logging
  *        estimation to work.
  */
 private[streaming] class PIDRateEstimator(
-    batchIntervalMillis: Long,
-    proportional: Double,
-    integral: Double,
-    derivative: Double,
-    minRate: Double
+    batchIntervalMillis: Long,    // 每个批次的时间
+    proportional: Double,     // conf.getDouble("spark.streaming.backpressure.pid.proportional", 1.0)
+    integral: Double,       // onf.getDouble("spark.streaming.backpressure.pid.integral", 0.2)
+    derivative: Double,   // conf.getDouble("spark.streaming.backpressure.pid.derived", 0.0)
+    minRate: Double       // conf.getDouble("spark.streaming.backpressure.pid.minRate", 100)
   ) extends RateEstimator with Logging {
-
+  // 是否是第一次执行
   private var firstRun: Boolean = true
+  // 上此计算完时间
   private var latestTime: Long = -1L
+  // 上此速率
   private var latestRate: Double = -1D
+  // 上此 error数量
   private var latestError: Double = -1L
 
   require(
@@ -76,12 +79,13 @@ private[streaming] class PIDRateEstimator(
 
   logInfo(s"Created PIDRateEstimator with proportional = $proportional, integral = $integral, " +
     s"derivative = $derivative, min rate = $minRate")
-
+  // 计算新的速率
+  // time, elems, workDelay, waitDelay
   def compute(
-      time: Long, // in milliseconds
+      time: Long, // in milliseconds  // 处理的时间
       numElements: Long,
-      processingDelay: Long, // in milliseconds
-      schedulingDelay: Long // in milliseconds
+      processingDelay: Long, // in milliseconds  // workDelay
+      schedulingDelay: Long // in milliseconds  // waitdelay
     ): Option[Double] = {
     logTrace(s"\ntime = $time, # records = $numElements, " +
       s"processing time = $processingDelay, scheduling delay = $schedulingDelay")
@@ -89,15 +93,18 @@ private[streaming] class PIDRateEstimator(
       if (time > latestTime && numElements > 0 && processingDelay > 0) {
 
         // in seconds, should be close to batchDuration
+        // 从更新 到完成的 延迟时间
         val delaySinceUpdate = (time - latestTime).toDouble / 1000
 
         // in elements/second
+        // 每秒的元素数,即处理的速率
         val processingRate = numElements.toDouble / processingDelay * 1000
 
         // In our system `error` is the difference between the desired rate and the measured rate
         // based on the latest batch information. We consider the desired rate to be latest rate,
         // which is what this estimator calculated for the previous batch.
         // in elements/second
+        // 表示上此处理速率 和 本次速率的差值
         val error = latestRate - processingRate
 
         // The error integral, based on schedulingDelay as an indicator for accumulated errors.
@@ -110,11 +117,18 @@ private[streaming] class PIDRateEstimator(
         // there wouldn't have been any overflowing elements, and the scheduling delay would have
         // been zero.
         // (in elements/second)
+        // schedulingDelay.toDouble * processingRate 因为调度延迟 而 没有被处理掉的 记录
+        // schedulingDelay.toDouble * processingRate/ batchIntervalMillis 就表示一个没有被处理的 历史速率
         val historicalError = schedulingDelay.toDouble * processingRate / batchIntervalMillis
 
         // in elements/(second ^ 2)
+        // error - latestError 本次速率差值 和 上此处理差值 的 差值
+        // (error - latestError) / delaySinceUpdate  表示 delaySinceUpdate 段时间的 差值速率
         val dError = (error - latestError) / delaySinceUpdate
-
+        // 新速率的计算方式
+        // 最小为 minRate, 默认为100
+        // delaySinceUpdate 默认为1   integral 默认为0.2  derivative默认为0  minRate默认为100
+        // 可见主要作用是 proportional * error   微调作用为 integral * historicalError
         val newRate = (latestRate - proportional * error -
                                     integral * historicalError -
                                     derivative * dError).max(minRate)
@@ -123,7 +137,7 @@ private[streaming] class PIDRateEstimator(
             | latestError = $latestError, historicalError = $historicalError
             | delaySinceUpdate = $delaySinceUpdate, dError = $dError
             """.stripMargin)
-
+        // 更新 记录
         latestTime = time
         if (firstRun) {
           latestRate = processingRate

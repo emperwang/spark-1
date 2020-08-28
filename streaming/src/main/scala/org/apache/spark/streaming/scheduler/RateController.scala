@@ -33,14 +33,14 @@ import org.apache.spark.util.{ThreadUtils, Utils}
  */
 private[streaming] abstract class RateController(val streamUID: Int, rateEstimator: RateEstimator)
     extends StreamingListener with Serializable {
-
+  // 初始化
   init()
 
   protected def publish(rate: Long): Unit
 
   @transient
   implicit private var executionContext: ExecutionContext = _
-
+  // 记录速率
   @transient
   private var rateLimit: AtomicLong = _
 
@@ -48,8 +48,10 @@ private[streaming] abstract class RateController(val streamUID: Int, rateEstimat
    * An initialization method called both from the constructor and Serialization code.
    */
   private def init() {
+    // 设置一下后台线程池
     executionContext = ExecutionContext.fromExecutorService(
       ThreadUtils.newDaemonSingleThreadExecutor("stream-rate-update"))
+    //第一次初始化速率为 -1
     rateLimit = new AtomicLong(-1L)
   }
 
@@ -63,6 +65,7 @@ private[streaming] abstract class RateController(val streamUID: Int, rateEstimat
    */
   private def computeAndPublish(time: Long, elems: Long, workDelay: Long, waitDelay: Long): Unit =
     Future[Unit] {
+      // 根据 处理的时间 以及 延迟时间 来计算新的速率
       val newRate = rateEstimator.compute(time, elems, workDelay, waitDelay)
       newRate.foreach { s =>
         rateLimit.set(s.toLong)
@@ -71,14 +74,19 @@ private[streaming] abstract class RateController(val streamUID: Int, rateEstimat
     }
 
   def getLatestRate(): Long = rateLimit.get()
-
+  // 每个批次完成后的  监听方法
   override def onBatchCompleted(batchCompleted: StreamingListenerBatchCompleted) {
+    // 获取完成 批次的信息
     val elements = batchCompleted.batchInfo.streamIdToInputInfo
 
     for {
+      // 完成的时间
       processingEnd <- batchCompleted.batchInfo.processingEndTime
+      // 延迟的时间
       workDelay <- batchCompleted.batchInfo.processingDelay
+      // 等待的延迟时间
       waitDelay <- batchCompleted.batchInfo.schedulingDelay
+      // 计算的记录数
       elems <- elements.get(streamUID).map(_.numRecords)
     } computeAndPublish(processingEnd, elems, workDelay, waitDelay)
   }
