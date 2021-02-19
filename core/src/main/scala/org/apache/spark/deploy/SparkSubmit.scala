@@ -620,12 +620,15 @@ private[spark] class SparkSubmit extends Logging {
     // In standalone cluster mode, use the REST client to submit the application (Spark 1.3+).
     // All Spark parameters are expected to be passed to the client through system properties.
     // 要启动程序的参数
+    // -----------------
+    // standaloneCluster模式下, 会执行ClientApp,
     if (args.isStandaloneCluster) {
       if (args.useRest) {
         childMainClass = REST_CLUSTER_SUBMIT_CLASS
         childArgs += (args.primaryResource, args.mainClass)
       } else {
         // In legacy standalone cluster mode, use Client as a wrapper around the user class
+        // 这里设置 ClientApp 来提交driver到 master
         childMainClass = STANDALONE_CLUSTER_SUBMIT_CLASS
         if (args.supervise) { childArgs += "--supervise" }
         Option(args.driverMemory).foreach { m => childArgs += ("--memory", m) }
@@ -822,7 +825,8 @@ private[spark] class SparkSubmit extends Logging {
 
     try {
       // 加载 要运行的类
-      // 这里是 org.apache.spark.deploy.SparkSubmit
+      // 根据spark运行的环境不同,具体的类也 不同
+      // 如果这里是 standaloneCluster 模式 则是 org.apache.spark.deploy.ClientApp 类
       mainClass = Utils.classForName(childMainClass)
     } catch {
       case e: ClassNotFoundException =>
@@ -842,6 +846,7 @@ private[spark] class SparkSubmit extends Logging {
     }
     // 创建 application
     val app: SparkApplication = if (classOf[SparkApplication].isAssignableFrom(mainClass)) {
+      // 把 mainClass 实体化
       mainClass.newInstance().asInstanceOf[SparkApplication]
     } else {
       // SPARK-4170

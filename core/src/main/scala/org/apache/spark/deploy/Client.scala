@@ -99,6 +99,11 @@ private class ClientEndpoint(
           driverArgs.cores,
           driverArgs.supervise,
           command)
+        // 在这里向master提交了  driver的请求
+        // 因为是 standaloneCluster 所以, 此处提交的要运行的driver是 DriverWrapper
+        // 而driverWrapper作为一个单独的进程运行后,会调用用户提交的 main方法来
+        // 调用用户的main方法后, 就开始了真正的业务处理; 即分析 task,提交application
+        // 之后此driver向 executor分发task
         asyncSendToMasterAndForwardReply[SubmitDriverResponse](
           RequestSubmitDriver(driverDescription))
       // 停止 driver
@@ -226,7 +231,8 @@ object Client {
     new ClientApp().start(args, new SparkConf())
   }
 }
-// client模式提交 任务
+// standaloneCluster模式下, 会通过此ClientApp 向master来提交 driver的信息
+// 此处driver的运行主类是 DriverWrapper
 private[spark] class ClientApp extends SparkApplication {
 
   override def start(args: Array[String], conf: SparkConf): Unit = {
@@ -243,6 +249,9 @@ private[spark] class ClientApp extends SparkApplication {
       map(rpcEnv.setupEndpointRef(_, Master.ENDPOINT_NAME))
     // new ClientEndpoint 中 driver 的启动
     // 重点 ClientEndpoint
+    // 这里ClientEndpoint在初始化时 会放入onStart消息
+    // ClientEndpoint在执行onStart方法时,会提交 driver到 master
+    // 发送此RequestSubmitDriver 请求到 master中,把 driver注册到 master中
     rpcEnv.setupEndpoint("client", new ClientEndpoint(rpcEnv, driverArgs, masterEndpoints, conf))
 
     rpcEnv.awaitTermination()

@@ -87,6 +87,8 @@ private[deploy] class Master(
   // 下一个app的 序列号
   private var nextAppNumber = 0
   // 所有的driver的信息
+  // driver即在 standaloneCluster模式下 ClientApp 提交的 DriverWrapper程序
+  // DriverWrapper是一个启动类,其主要功能是调用用户编写的 main方法,启动业务处理程序
   private val drivers = new HashSet[DriverInfo]
   // 所有完成的driver的信息
   private val completedDrivers = new ArrayBuffer[DriverInfo]
