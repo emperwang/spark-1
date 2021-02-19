@@ -244,6 +244,7 @@ private[spark] object CoarseGrainedExecutorBackend extends Logging {
       env.rpcEnv.awaitTermination()
     }
   }
+  // 新进程的启动入口
   // executor 真正启动的类
   def main(args: Array[String]) {
     var driverUrl: String = null

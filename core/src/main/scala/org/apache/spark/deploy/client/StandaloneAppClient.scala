@@ -56,7 +56,7 @@ private[spark] class StandaloneAppClient(
   private val REGISTRATION_RETRIES = 3
   // 和master交互的 endPoint
   private val endpoint = new AtomicReference[RpcEndpointRef]
-  //
+  // 记录此AppClient 提交任务后 master生成的appId
   private val appId = new AtomicReference[String]
   // 注册成功的标志
   private val registered = new AtomicBoolean(false)
@@ -188,7 +188,8 @@ private[spark] class StandaloneAppClient(
       case ApplicationRemoved(message) =>
         markDead("Master removed our application: %s".format(message))
         stop()
-
+      // master 查找到合适的 worker并发送 LaunchExecutor 后, 会发送此 ExecutorAdded消息,告知driver
+        // executor添加的消息
       case ExecutorAdded(id: Int, workerId: String, hostPort: String, cores: Int, memory: Int) =>
         val fullId = appId + "/" + id
         logInfo("Executor added: %s on %s (%s) with %d core(s)".format(fullId, workerId, hostPort,

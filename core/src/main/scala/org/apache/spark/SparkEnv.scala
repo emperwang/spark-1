@@ -306,6 +306,8 @@ object SparkEnv extends Logging {
     val broadcastManager = new BroadcastManager(isDriver, conf, securityManager)
 
     //  重点  mapOutputTracker 的创建  对任务信息的一些追踪
+    //  从这里可以看到driver端是MapOutputTrackerMaster
+    // executor端是 MapOutputTrackerWorker
     val mapOutputTracker = if (isDriver) {
       new MapOutputTrackerMaster(conf, broadcastManager, isLocal)
     } else {
@@ -330,13 +332,14 @@ object SparkEnv extends Logging {
     val shuffleManager = instantiateClass[ShuffleManager](shuffleMgrClass)
 
     val useLegacyMemoryManager = conf.getBoolean("spark.memory.useLegacyMode", false)
+    // 内存管理器
     val memoryManager: MemoryManager =
       if (useLegacyMemoryManager) {
         new StaticMemoryManager(conf, numUsableCores)
       } else {
         UnifiedMemoryManager(conf, numUsableCores)
       }
-
+    // 获取blockManagerPort 即端口, 根据是否是driver 得知获取的是不一样的配置
     val blockManagerPort = if (isDriver) {
       conf.get(DRIVER_BLOCK_MANAGER_PORT)
     } else {

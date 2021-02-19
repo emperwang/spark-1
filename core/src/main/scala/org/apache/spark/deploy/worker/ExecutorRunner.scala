@@ -70,7 +70,7 @@ private[deploy] class ExecutorRunner(
   private var shutdownHook: AnyRef = null
   // executor的启动
   private[worker] def start() {
-    // 启动一个线程来启动 executor
+    // 启动一个进程来启动 executor
     // executor真正运行的函数  fetchAndRunExecutor
     // 从名字看 就是 fetch拉取资源
     // AndRunExecutor 运行executor

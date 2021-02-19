@@ -184,9 +184,11 @@ class AppClientSuite
 
   /** Application Listener to collect events */
   private class AppClientCollector extends StandaloneAppClientListener with Logging {
+    // 保存 注册到 master的application的 appId
     val connectedIdList = new ConcurrentLinkedQueue[String]()
     @volatile var disconnectedCount: Int = 0
     val deadReasonList = new ConcurrentLinkedQueue[String]()
+    // 保存 此application对应的 executor的id 信息
     val execAddedList = new ConcurrentLinkedQueue[String]()
     val execRemovedList = new ConcurrentLinkedQueue[String]()
 

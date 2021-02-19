@@ -188,21 +188,29 @@ class SparkContext(config: SparkConf) extends Logging {
    | of them to some neutral value ahead of time, so that calling "stop()" while the       |
    | constructor is still running is safe.                                                 |
    * ------------------------------------------------------------------------------------- */
-
+  // 包含了多个其他模块的引用
+  // 配置
   private var _conf: SparkConf = _
   private var _eventLogDir: Option[URI] = None
   private var _eventLogCodec: Option[String] = None
   private var _listenerBus: LiveListenerBus = _
+  // env
   private var _env: SparkEnv = _
   private var _statusTracker: SparkStatusTracker = _
   private var _progressBar: Option[ConsoleProgressBar] = None
   private var _ui: Option[SparkUI] = None
   private var _hadoopConfiguration: Configuration = _
+  // executor 内存
   private var _executorMemory: Int = _
+  // 即CoarseGrainedSchedulerBackend, 用于和executor 分发任务
   private var _schedulerBackend: SchedulerBackend = _
+  // 具体的任务调度器
   private var _taskScheduler: TaskScheduler = _
+  // 心跳接收
   private var _heartbeatReceiver: RpcEndpointRef = _
+  // DAG
   @volatile private var _dagScheduler: DAGScheduler = _
+  // app id
   private var _applicationId: String = _
   private var _applicationAttemptId: Option[String] = None
   private var _eventLogger: Option[EventLoggingListener] = None
@@ -211,6 +219,7 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _listenerBusStarted: Boolean = false
   private var _jars: Seq[String] = _
   private var _files: Seq[String] = _
+  // 关闭钩子函数
   private var _shutdownHookRef: AnyRef = _
   private var _statusStore: AppStatusStore = _
 
@@ -218,7 +227,7 @@ class SparkContext(config: SparkConf) extends Logging {
    | Accessors and public fields. These provide access to the internal state of the        |
    | context.                                                                              |
    * ------------------------------------------------------------------------------------- */
-
+  // 下面包含了多个上面field的 get方法
   private[spark] def conf: SparkConf = _conf
 
   /**
@@ -288,6 +297,7 @@ class SparkContext(config: SparkConf) extends Logging {
   private[spark] def executorMemory: Int = _executorMemory
 
   // Environment variables to pass to our executors.
+  // 存储要传递给 executor的环境变量
   private[spark] val executorEnvs = HashMap[String, String]()
 
   // Set SPARK_USER for user who is running SparkContext.
@@ -502,7 +512,9 @@ class SparkContext(config: SparkConf) extends Logging {
     // 重点
     // 创建 taskScheduler 和 backend
     val (sched, ts) = SparkContext.createTaskScheduler(this, master, deployMode)
+    // 此sched就是CoarseGrainedExecutorBackend 或者其子类,用于向executor发送任务
     _schedulerBackend = sched
+    // ts即 TaskSchedulerImpl, 真正进行任务调度的地方
     _taskScheduler = ts
     // 创建 DAGScheduler
     _dagScheduler = new DAGScheduler(this)
@@ -514,6 +526,7 @@ class SparkContext(config: SparkConf) extends Logging {
     _taskScheduler.start()
     // 从taskScheduler 来获取 application的id 以及 attemptId
     _applicationId = _taskScheduler.applicationId()
+    // todo 20210219 此次查找的 applicationAttemptId 为None, 集群模式下不需要吗 ??????
     _applicationAttemptId = taskScheduler.applicationAttemptId()
     // 保存一下app.id
     _conf.set("spark.app.id", _applicationId)
@@ -2784,6 +2797,7 @@ object SparkContext extends Logging {
         // local[*, M] means the number of cores on the computer with M failures
         // local[N, M] means exactly N threads with M failures
         val threadCount = if (threads == "*") localCpuCount else threads.toInt
+        // taskSchemuler 真正对任务进行调度的地方
         val scheduler = new TaskSchedulerImpl(sc, maxFailures.toInt, isLocal = true)
         val backend = new LocalSchedulerBackend(sc.getConf, scheduler, threadCount)
         scheduler.initialize(backend)
@@ -2791,8 +2805,17 @@ object SparkContext extends Logging {
       // 创建的 taskScheduler是TaskSchedulerImpl
       // 创建的 schedulerbackend 是 StandaloneSchedulerBackend
       case SPARK_REGEX(sparkUrl) =>
+        // taskSchemuler 真正对任务进行调度的地方
         val scheduler = new TaskSchedulerImpl(sc)
         val masterUrls = sparkUrl.split(",").map("spark://" + _)
+        // 此backend 是driver和executor通信的地方
+        // 此backend 会把任务下发到executor
+        // 此StandaloneSchedulerBackend在创建完成后,在onStart方法中会创建Application,此application就是CoarseGrainedExecutorBackend
+        // 并创建StandaloneAppClient,此appClient会把上面创建的application发送到 master
+        // master会把此app下发到worker中进行启动, 启动后的app就是CoarseGrainedExecutorBackend进程
+        // CoarseGrainedExecutorBackend进程会向CoarseGrainedSchedulerBackend进行注册
+        // CoarseGrainedSchedulerBackend 会 向注册完成的 CoarseGrainedExecutorBackend 发送taskSet任务
+        // 此standaloneSchedulerBackend是CoarseGrainedSchedulerBackend的子类
         val backend = new StandaloneSchedulerBackend(scheduler, sc, masterUrls)
         // taskScheduler的初始化 并记录 backend
         scheduler.initialize(backend)

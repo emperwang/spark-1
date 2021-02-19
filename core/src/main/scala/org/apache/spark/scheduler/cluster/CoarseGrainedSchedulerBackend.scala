@@ -69,6 +69,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   // must be protected by `CoarseGrainedSchedulerBackend.this`. Besides, `executorDataMap` should
   // only be modified in `DriverEndpoint.receive/receiveAndReply` with protection by
   // `CoarseGrainedSchedulerBackend.this`.
+  // 记录此driver  分配到的  executor的信息
   private val executorDataMap = new HashMap[String, ExecutorData]
 
   // Number of executors requested by the cluster manager, [[ExecutorAllocationManager]]
@@ -180,6 +181,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       case RegisterExecutor(executorId, executorRef, hostname, cores, logUrls) =>
         // 如果此executor已经注册过,则返回注册失败消息
         if (executorDataMap.contains(executorId)) {
+            // 回复消息
           executorRef.send(RegisterExecutorFailed("Duplicate executor ID: " + executorId))
           context.reply(true)
           // executor所在的host,不在白名单中,则同样注册失败
@@ -202,10 +204,12 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           addressToExecutorId(executorAddress) = executorId
           totalCoreCount.addAndGet(cores)
           totalRegisteredExecutors.addAndGet(1)
+          // 封装executor传递过来的消息
           val data = new ExecutorData(executorRef, executorAddress, hostname,
             cores, cores, logUrls)
           // This must be synchronized because variables mutated
           // in this block are read when requesting executors
+          // 同步记录此 executor消息
           CoarseGrainedSchedulerBackend.this.synchronized {
             executorDataMap.put(executorId, data)
             if (currentExecutorIdCounter < executorId.toInt) {
@@ -422,6 +426,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
 
     // TODO (prashant) send conf instead of properties
+    // 在这里创建名称为CoarseGrainedScheduler 的 endpoint, 此即driverEndpoint
     driverEndpoint = createDriverEndpointRef(properties)
   }
 

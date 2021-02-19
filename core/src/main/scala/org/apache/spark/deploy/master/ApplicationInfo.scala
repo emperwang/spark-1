@@ -49,7 +49,7 @@ private[spark] class ApplicationInfo(
   @transient private[master] var executorLimit: Int = _
 
   @transient private var nextExecutorId: Int = _
-
+  // 做了一些初始化, 即:创建容器 以及 设置状态值
   init()
 
   private def readObject(in: java.io.ObjectInputStream): Unit = Utils.tryOrIOException {
